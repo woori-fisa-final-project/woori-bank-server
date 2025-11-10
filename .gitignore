@@ -3,6 +3,7 @@ HELP.md
 build/
 *.yml
 *.yaml
+*.xml
 
 !gradle/wrapper/gradle-wrapper.jar
 !**/src/main/**/build/
