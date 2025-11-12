@@ -4,20 +4,18 @@ import dev.woori.wooriBank.config.exception.CommonException;
 import dev.woori.wooriBank.config.exception.ErrorCode;
 import dev.woori.wooriBank.config.jwt.JwtValidator;
 import dev.woori.wooriBank.config.security.Encoder;
-import dev.woori.wooriBank.domain.auth.dto.LoginReqDto;
-import dev.woori.wooriBank.domain.auth.dto.LoginResDto;
+import dev.woori.wooriBank.domain.auth.dto.TokenResDto;
 import dev.woori.wooriBank.domain.auth.dto.RefreshReqDto;
-import dev.woori.wooriBank.domain.auth.entity.AuthUsers;
+import dev.woori.wooriBank.domain.auth.entity.BankClientApp;
 import dev.woori.wooriBank.domain.auth.entity.RefreshToken;
 import dev.woori.wooriBank.domain.auth.jwt.JwtIssuer;
-import dev.woori.wooriBank.domain.auth.port.AuthUserPort;
 import dev.woori.wooriBank.domain.auth.port.RefreshTokenPort;
-import dev.woori.wooriBank.domain.users.entity.Role;
+import dev.woori.wooriBank.domain.auth.entity.Role;
+import dev.woori.wooriBank.domain.auth.repository.BankClientAppRepository;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.JwtException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,27 +27,18 @@ import java.time.Instant;
 @Transactional
 public class AuthService {
 
-    private final AuthUserPort authUserRepository;
-    private final PasswordEncoder passwordEncoder;
     private final Encoder encoder;
     private final JwtIssuer jwtIssuer;
     private final JwtValidator jwtValidator;
     private final RefreshTokenPort refreshTokenRepository;
 
     /**
-     * id와 pw를 확인 후 사용자임이 확인되면 jwt 토큰을 발급합니다.
-     * @param loginReqDto 로그인 입력값 - id / pw
-     * @return loginResDto - access token / refresh token
+     * name에 따른 token을 발급합니다.
+     * @param name token에 들어가는 이름
+     * @return access token + refresh token
      */
-    public LoginResDto login(LoginReqDto loginReqDto) {
-        AuthUsers user = authUserRepository.findByUserId(loginReqDto.userId())
-                .orElseThrow(() -> new CommonException(ErrorCode.UNAUTHORIZED, "아이디 또는 비밀번호가 올바르지 않습니다."));
-
-        if(!passwordEncoder.matches(loginReqDto.password(), user.getPassword())){
-            throw new CommonException(ErrorCode.UNAUTHORIZED, "아이디 또는 비밀번호가 올바르지 않습니다.");
-        }
-
-        return generateAndSaveToken(loginReqDto.userId(), user.getRole());
+    public TokenResDto issueToken(String name){
+        return generateAndSaveToken(name, Role.ROLE_USER);
     }
 
     /**
@@ -57,7 +46,7 @@ public class AuthService {
      * @param refreshReqDto 사용자의 refresh token
      * @return access token
      */
-    public LoginResDto refresh(RefreshReqDto refreshReqDto) {
+    public TokenResDto refresh(RefreshReqDto refreshReqDto) {
         String refreshToken = refreshReqDto.refreshToken();
         String username;
         Role role;
@@ -85,17 +74,7 @@ public class AuthService {
         return generateAndSaveToken(username, role);
     }
 
-    /**
-     * 사용자의 요청을 받아서 로그아웃 처리 - db에서 refresh token 삭제
-     * @param username 사용자 id
-     * @return 결과 메시지
-     */
-    public String logout(String username) {
-        refreshTokenRepository.deleteByUsername(username);
-        return "로그아웃되었습니다.";
-    }
-
-    public LoginResDto generateAndSaveToken(String username, Role role){
+    public TokenResDto generateAndSaveToken(String username, Role role){
         // jwt 토큰 저장 로직
         String accessToken = jwtIssuer.generateAccessToken(username, role);
         var refreshTokenInfo = jwtIssuer.generateRefreshToken(username, role);
@@ -116,6 +95,6 @@ public class AuthService {
                         .build());
         refreshTokenRepository.save(token);
 
-        return new LoginResDto(accessToken, refreshToken);
+        return new TokenResDto(accessToken, refreshToken);
     }
 }

@@ -1,5 +1,6 @@
 package dev.woori.wooriBank.config.security;
 
+import dev.woori.wooriBank.config.filter.AppKeySecretFilter;
 import dev.woori.wooriBank.config.filter.JwtFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
@@ -23,16 +24,16 @@ import java.util.List;
 public class SecurityConfig {
 
     private final JwtFilter jwtFilter;
+    private final AppKeySecretFilter appKeySecretFilter;
 
     // 인증 없이도 접근 가능한 엔드포인트 목록
     private static final List<String> whiteList = List.of(
-            "/auth/login", // 로그인
-            "/auth/signup" // 회원가입
+            "/auth/token"
     );
 
     // 관리자만 접근 가능한 엔드포인트 목록
     private static final List<String> adminList = List.of(
-            "/admin/*"
+            "/admin/**"
     );
 
     // 개발 모드에서는 인증 적용 x
@@ -57,7 +58,8 @@ public class SecurityConfig {
                         .requestMatchers(whiteList.toArray(new String[0])).permitAll()
                         .requestMatchers(adminList.toArray(new String[0])).hasRole("ADMIN")
                         .anyRequest().authenticated()) // 나머지는 JWT 필요
-                .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(appKeySecretFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterAfter(jwtFilter, AppKeySecretFilter.class)
                 .build();
     }
 

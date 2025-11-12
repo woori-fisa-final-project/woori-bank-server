@@ -1,7 +1,7 @@
 package dev.woori.wooriBank.domain.auth.jwt;
 
 import dev.woori.wooriBank.config.jwt.TokenInfo;
-import dev.woori.wooriBank.domain.users.entity.Role;
+import dev.woori.wooriBank.domain.auth.entity.Role;
 import io.jsonwebtoken.Header;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
