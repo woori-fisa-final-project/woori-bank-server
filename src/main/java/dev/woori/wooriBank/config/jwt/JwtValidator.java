@@ -62,8 +62,4 @@ public class JwtValidator {
             return false;
         }
     }
-
-    public boolean validateAppKey(String appKey) {
-        return bankClientAppRepository.findByAppKey(appKey).isPresent();
-    }
 }

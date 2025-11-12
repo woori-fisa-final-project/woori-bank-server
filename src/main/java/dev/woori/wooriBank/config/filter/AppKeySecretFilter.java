@@ -65,6 +65,9 @@ public class AppKeySecretFilter extends OncePerRequestFilter {
         }
         // TODO: payload secretKey로 검증하기
 
+        // 검증이 끝나면 clientApp을 attribute로 설정
+        request.setAttribute("clientApp", clientApp);
+
         filterChain.doFilter(request, response);
     }
 }

@@ -1,6 +1,8 @@
 package dev.woori.wooriBank.domain.account.entity;
 
 import dev.woori.wooriBank.config.BaseEntity;
+import dev.woori.wooriBank.config.exception.CommonException;
+import dev.woori.wooriBank.config.exception.ErrorCode;
 import dev.woori.wooriBank.domain.users.entity.BankUser;
 import jakarta.persistence.*;
 import lombok.*;
@@ -35,6 +37,9 @@ public class BankAccount extends BaseEntity {
     }
 
     public void withdraw(int amount) {
+        if(this.balance - amount < 0) {
+            throw new CommonException(ErrorCode.INVALID_REQUEST, "잔액이 부족합니다.");
+        }
         this.balance -= amount;
     }
 }

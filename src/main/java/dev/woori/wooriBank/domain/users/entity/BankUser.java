@@ -33,6 +33,6 @@ public class BankUser extends BaseEntity {
     @Column(nullable = false)
     private LocalDate birth;
 
-    @Column(name = "auth_token", nullable = false, length = 255)
+    @Column(name = "auth_token", nullable = false)
     private String authToken;
 }

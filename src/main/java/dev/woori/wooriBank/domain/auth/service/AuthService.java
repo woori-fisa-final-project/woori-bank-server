@@ -31,23 +31,14 @@ public class AuthService {
     private final JwtIssuer jwtIssuer;
     private final JwtValidator jwtValidator;
     private final RefreshTokenPort refreshTokenRepository;
-    public final BankClientAppRepository bankClientAppRepository;
 
     /**
-     * appKey와 secretKey를 받고 검증해 access token과 refresh token을 발급합니다.
-     * @param appKey api에 접근하기 위한 key
-     * @param secretKey 개별 사용자마다 주어지는 비밀키 (추후 payload 암호화에 사용)
+     * name에 따른 token을 발급합니다.
+     * @param name token에 들어가는 이름
      * @return access token + refresh token
      */
-    public TokenResDto issueToken(String appKey, String secretKey){
-        BankClientApp clientApp = bankClientAppRepository.findByAppKey(appKey)
-                .orElseThrow(() -> new CommonException(ErrorCode.UNAUTHORIZED, "Invalid appKey"));
-
-        if (!clientApp.getSecretKey().equals(secretKey)) {
-            throw new CommonException(ErrorCode.UNAUTHORIZED, "Invalid secretKey");
-        }
-
-        return generateAndSaveToken(appKey, Role.ROLE_USER);
+    public TokenResDto issueToken(String name){
+        return generateAndSaveToken(name, Role.ROLE_USER);
     }
 
     /**

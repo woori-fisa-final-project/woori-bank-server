@@ -4,7 +4,9 @@ import dev.woori.wooriBank.config.response.ApiResponse;
 import dev.woori.wooriBank.config.response.BaseResponse;
 import dev.woori.wooriBank.config.response.SuccessCode;
 import dev.woori.wooriBank.domain.auth.dto.RefreshReqDto;
+import dev.woori.wooriBank.domain.auth.entity.BankClientApp;
 import dev.woori.wooriBank.domain.auth.service.AuthService;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -19,9 +21,9 @@ public class AuthController {
     private final AuthService authService;
 
     @PostMapping("/token")
-    public ResponseEntity<BaseResponse<?>> issueToken(@RequestHeader("appKey") String appKey,
-                                               @RequestHeader("secretKey") String secretKey){
-        return ApiResponse.success(SuccessCode.OK, authService.issueToken(appKey, secretKey));
+    public ResponseEntity<BaseResponse<?>> issueToken(HttpServletRequest request){
+        BankClientApp clientApp = (BankClientApp)request.getAttribute("clientApp");
+        return ApiResponse.success(SuccessCode.OK, authService.issueToken(clientApp.getName()));
     }
 
     @PostMapping("/refresh")
