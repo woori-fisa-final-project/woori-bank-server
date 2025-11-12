@@ -1,7 +1,9 @@
 package dev.woori.wooriBank.config.filter;
 
+import dev.woori.wooriBank.config.exception.CommonException;
+import dev.woori.wooriBank.config.exception.ErrorCode;
 import dev.woori.wooriBank.config.jwt.JwtValidator;
-import dev.woori.wooriBank.domain.users.entity.Role;
+import dev.woori.wooriBank.domain.auth.entity.Role;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -28,7 +30,7 @@ public class JwtFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
 
-        // 헤더에서 authorization 토큰 가져오기
+        // 헤더에서 키값 가져오기
         String accessToken = request.getHeader(HttpHeaders.AUTHORIZATION);
 
         if (accessToken != null && accessToken.startsWith(BEARER)) {

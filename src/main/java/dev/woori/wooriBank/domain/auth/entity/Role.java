@@ -1,4 +1,4 @@
-package dev.woori.wooriBank.domain.users.entity;
+package dev.woori.wooriBank.domain.auth.entity;
 
 public enum Role {
     ROLE_USER,
