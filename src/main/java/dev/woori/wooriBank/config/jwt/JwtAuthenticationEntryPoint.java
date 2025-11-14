@@ -13,6 +13,7 @@ import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
+import java.util.Collections;
 
 @Slf4j
 @Component
@@ -30,6 +31,7 @@ public class JwtAuthenticationEntryPoint implements AuthenticationEntryPoint {
         response.setCharacterEncoding("utf-8");
         response.setStatus(HttpStatus.UNAUTHORIZED.value());
 
-        response.getWriter().write(objectMapper.writeValueAsString(authException.getMessage()));
+        response.getWriter().write(objectMapper.writeValueAsString
+                (Collections.singletonMap("message", authException.getMessage())));
     }
 }
