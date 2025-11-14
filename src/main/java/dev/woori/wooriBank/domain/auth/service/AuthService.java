@@ -2,18 +2,15 @@ package dev.woori.wooriBank.domain.auth.service;
 
 import dev.woori.wooriBank.config.exception.CommonException;
 import dev.woori.wooriBank.config.exception.ErrorCode;
+import dev.woori.wooriBank.config.jwt.JwtInfo;
 import dev.woori.wooriBank.config.jwt.JwtValidator;
 import dev.woori.wooriBank.config.security.Encoder;
 import dev.woori.wooriBank.domain.auth.dto.TokenResDto;
 import dev.woori.wooriBank.domain.auth.dto.RefreshReqDto;
-import dev.woori.wooriBank.domain.auth.entity.BankClientApp;
 import dev.woori.wooriBank.domain.auth.entity.RefreshToken;
 import dev.woori.wooriBank.domain.auth.jwt.JwtIssuer;
 import dev.woori.wooriBank.domain.auth.port.RefreshTokenPort;
 import dev.woori.wooriBank.domain.auth.entity.Role;
-import dev.woori.wooriBank.domain.auth.repository.BankClientAppRepository;
-import io.jsonwebtoken.ExpiredJwtException;
-import io.jsonwebtoken.JwtException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -48,18 +45,11 @@ public class AuthService {
      */
     public TokenResDto refresh(RefreshReqDto refreshReqDto) {
         String refreshToken = refreshReqDto.refreshToken();
-        String username;
-        Role role;
 
         // 토큰 만료 및 유효성 검증
-        try {
-            username = jwtValidator.getUsername(refreshToken);
-            role = jwtValidator.getRole(refreshToken);
-        } catch (ExpiredJwtException e) {
-            throw new CommonException(ErrorCode.TOKEN_EXPIRED, "토큰이 만료되었습니다.");
-        } catch (JwtException | IllegalArgumentException e) {
-            throw new CommonException(ErrorCode.UNAUTHORIZED, "유효하지 않은 리프레시 토큰입니다.");
-        }
+        JwtInfo jwtInfo = jwtValidator.parseToken(refreshToken);
+        String username = jwtInfo.username();
+        Role role = jwtInfo.role();
 
         // 토큰 존재 여부 검증
         RefreshToken token = refreshTokenRepository.findByUsername(username)
