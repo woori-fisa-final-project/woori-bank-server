@@ -1,6 +1,5 @@
 package dev.woori.wooriBank.domain.account.entity;
 
-import dev.woori.wooriBank.domain.users.entity.BankUser;
 import jakarta.persistence.*;
 import lombok.*;
 

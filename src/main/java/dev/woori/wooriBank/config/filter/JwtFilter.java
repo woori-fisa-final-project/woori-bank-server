@@ -1,9 +1,7 @@
 package dev.woori.wooriBank.config.filter;
 
-import dev.woori.wooriBank.config.exception.CommonException;
-import dev.woori.wooriBank.config.exception.ErrorCode;
+import dev.woori.wooriBank.config.jwt.JwtInfo;
 import dev.woori.wooriBank.config.jwt.JwtValidator;
-import dev.woori.wooriBank.domain.auth.entity.Role;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -35,17 +33,14 @@ public class JwtFilter extends OncePerRequestFilter {
 
         if (accessToken != null && accessToken.startsWith(BEARER)) {
             String token = accessToken.substring(BEARER.length()); // 순수 토큰값만 가져오기
-            if (jwtValidator.validateToken(token)) {
-                String username = jwtValidator.getUsername(token);
-                Role role = jwtValidator.getRole(token);
+            JwtInfo jwtInfo = jwtValidator.parseToken(token);
 
-                // Authentication 객체 생성
-                UsernamePasswordAuthenticationToken auth =
-                        new UsernamePasswordAuthenticationToken(username, null,
-                                List.of(new SimpleGrantedAuthority(role.name())));
+            // Authentication 객체 생성
+            UsernamePasswordAuthenticationToken auth =
+                    new UsernamePasswordAuthenticationToken(jwtInfo.username(), null,
+                            List.of(new SimpleGrantedAuthority(jwtInfo.role().name())));
 
-                SecurityContextHolder.getContext().setAuthentication(auth);
-            }
+            SecurityContextHolder.getContext().setAuthentication(auth);
         }
 
         filterChain.doFilter(request, response);
