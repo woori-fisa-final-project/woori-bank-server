@@ -26,20 +26,26 @@ public class BankAccount extends BaseEntity {
     @Column(name = "account_number", nullable = false, unique = true, length = 20)
     private String accountNumber;
 
-    @Column(nullable = false, length = 4)
+    @Column(nullable = false, length = 255)
     private String password;
 
-    @Column(nullable = false)
-    private Integer balance;
+    @Column(nullable = false, precision = 15, scale = 2)
+    private java.math.BigDecimal balance;
 
-    public void deposit(int amount) {
-        this.balance += amount;
+    public void deposit(java.math.BigDecimal amount) {
+        if (amount.compareTo(java.math.BigDecimal.ZERO) <= 0) {
+            throw new CommonException(ErrorCode.INVALID_REQUEST, "입금액은 0보다 커야 합니다.");
+        }
+        this.balance = this.balance.add(amount);
     }
 
-    public void withdraw(int amount) {
-        if(this.balance - amount < 0) {
+    public void withdraw(java.math.BigDecimal amount) {
+        if (amount.compareTo(java.math.BigDecimal.ZERO) <= 0) {
+            throw new CommonException(ErrorCode.INVALID_REQUEST, "출금액은 0보다 커야 합니다.");
+        }
+        if (this.balance.compareTo(amount) < 0) {
             throw new CommonException(ErrorCode.INVALID_REQUEST, "잔액이 부족합니다.");
         }
-        this.balance -= amount;
+        this.balance = this.balance.subtract(amount);
     }
 }

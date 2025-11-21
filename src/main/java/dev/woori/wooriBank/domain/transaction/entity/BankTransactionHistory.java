@@ -35,8 +35,8 @@ public class BankTransactionHistory {
     @Column(name = "display_name", length = 30)
     private String displayName;
 
-    @Column(nullable = false)
-    private Integer amount;
+    @Column(nullable = false, precision = 15, scale = 2)
+    private java.math.BigDecimal amount;
 
     @Column(length = 50)
     private String description;
