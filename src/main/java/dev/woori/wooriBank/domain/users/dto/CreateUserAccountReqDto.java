@@ -28,15 +28,13 @@ public record CreateUserAccountReqDto(
         @NotNull(message = "생년월일은 필수입니다")
         LocalDate birth,
 
-        @NotBlank(message = "계좌번호는 필수입니다")
-        @Size(max = 20, message = "계좌번호는 최대 20자입니다")
-        String accountNumber,
-
-        @NotBlank(message = "계좌 비밀번호는 필수입니다")
-        @Size(min = 4, max = 4, message = "계좌 비밀번호는 4자리입니다")
-        String accountPassword,
+        @NotBlank(message = "계좌 PIN은 필수입니다")
+        @Size(min = 4, max = 4, message = "계좌 PIN은 4자리입니다")
+        @Pattern(regexp = "^\\d{4}$", message = "계좌 PIN은 4자리 숫자여야 합니다")
+        String accountPin,
 
         @NotNull(message = "초기 입금액은 필수입니다")
+        @DecimalMin(value = "0.0", inclusive = true, message = "초기 입금액은 0 이상이어야 합니다")
         java.math.BigDecimal initialBalance
 ) {
 }

@@ -33,11 +33,17 @@ public class BankAccount extends BaseEntity {
     private java.math.BigDecimal balance;
 
     public void deposit(java.math.BigDecimal amount) {
+        if (amount.compareTo(java.math.BigDecimal.ZERO) <= 0) {
+            throw new CommonException(ErrorCode.INVALID_REQUEST, "입금액은 0보다 커야 합니다.");
+        }
         this.balance = this.balance.add(amount);
     }
 
     public void withdraw(java.math.BigDecimal amount) {
-        if(this.balance.compareTo(amount) < 0) {
+        if (amount.compareTo(java.math.BigDecimal.ZERO) <= 0) {
+            throw new CommonException(ErrorCode.INVALID_REQUEST, "출금액은 0보다 커야 합니다.");
+        }
+        if (this.balance.compareTo(amount) < 0) {
             throw new CommonException(ErrorCode.INVALID_REQUEST, "잔액이 부족합니다.");
         }
         this.balance = this.balance.subtract(amount);
