@@ -29,7 +29,6 @@ public record CreateUserAccountReqDto(
         LocalDate birth,
 
         @NotBlank(message = "계좌 PIN은 필수입니다")
-        @Size(min = 4, max = 4, message = "계좌 PIN은 4자리입니다")
         @Pattern(regexp = "^\\d{4}$", message = "계좌 PIN은 4자리 숫자여야 합니다")
         String accountPin,
 

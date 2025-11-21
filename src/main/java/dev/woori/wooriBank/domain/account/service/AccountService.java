@@ -1,11 +1,11 @@
-package dev.woori.wooriBank.domain.users.service;
+package dev.woori.wooriBank.domain.account.service;
 
 import dev.woori.wooriBank.config.exception.CommonException;
 import dev.woori.wooriBank.config.exception.ErrorCode;
+import dev.woori.wooriBank.domain.account.dto.request.AccountCreateDto;
+import dev.woori.wooriBank.domain.account.dto.response.AccountResponse;
 import dev.woori.wooriBank.domain.account.entity.BankAccount;
 import dev.woori.wooriBank.domain.account.repository.BankAccountRepository;
-import dev.woori.wooriBank.domain.users.dto.CreateUserAccountReqDto;
-import dev.woori.wooriBank.domain.users.dto.UserAccountResDto;
 import dev.woori.wooriBank.domain.users.entity.BankUser;
 import dev.woori.wooriBank.domain.users.repository.BankUserRepository;
 import lombok.RequiredArgsConstructor;
@@ -14,32 +14,34 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
- * 회원 생성 및 계좌 개설 서비스
- * 메인 서버의 userId를 받아 은행 서버의 BankUser와 BankAccount를 생성
+ * 계좌 개설 서비스
+ * 명세서: POST /api/account/create
  */
 @Service
 @RequiredArgsConstructor
-public class UserAccountService {
+public class AccountService {
 
     private final BankUserRepository bankUserRepository;
     private final BankAccountRepository bankAccountRepository;
     private final PasswordEncoder passwordEncoder;
 
     /**
-     * 회원 생성 + 계좌 개설 (1인 1계좌)
+     * 계좌 개설 (명세서 버전)
      *
-     * @param externalUserId 메인 서버의 userId (bank_users.auth_token에 저장)
-     * @param dto 회원 및 계좌 정보
-     * @return 생성된 회원 및 계좌 정보
-     * @throws CommonException CONFLICT - 이미 계좌가 있는 사용자, 이메일 중복, 계좌번호 중복
+     * @param externalUserId 메인 서버의 사용자 ID (Header에서 전달)
+     * @param dto 계좌 개설 요청 정보
+     * @return 생성된 계좌 정보
      */
     @Transactional
-    public UserAccountResDto createUserWithAccount(String externalUserId, CreateUserAccountReqDto dto) {
+    public AccountResponse createAccount(String externalUserId, AccountCreateDto dto) {
 
-        // 1. 사전 검증 (명확성)
+        // 1. 사전 검증
         if (bankUserRepository.existsByAuthToken(externalUserId)) {
             throw new CommonException(ErrorCode.CONFLICT, "이미 은행 계좌가 개설된 사용자입니다.");
         }
@@ -49,14 +51,15 @@ public class UserAccountService {
         }
 
         try {
-            // 2. BankUser 생성 (메인 서버의 userId를 authToken에 저장)
+            // 2. BankUser 생성
+            LocalDate birthDate = LocalDate.parse(dto.birth(), DateTimeFormatter.ofPattern("yyyyMMdd"));
+
             BankUser bankUser = BankUser.builder()
-                    .nameKr(dto.nameKr())
-                    .nameEn(dto.nameEn())
+                    .nameKr(dto.name())
                     .email(dto.email())
-                    .phoneNumber(dto.phoneNumber())
-                    .birth(dto.birth())
-                    .authToken(externalUserId)  // 메인 서버의 userId 저장
+                    .phoneNumber(dto.phone())
+                    .birth(birthDate)
+                    .authToken(externalUserId)
                     .build();
 
             BankUser savedUser = bankUserRepository.save(bankUser);
@@ -64,26 +67,24 @@ public class UserAccountService {
             // 3. 계좌번호 자동 생성
             String accountNumber = generateAccountNumber();
 
-            // 4. BankAccount 생성 (계좌 PIN은 BCrypt 암호화)
+            // 4. BankAccount 생성
             BankAccount bankAccount = BankAccount.builder()
                     .user(savedUser)
                     .accountNumber(accountNumber)
-                    .password(passwordEncoder.encode(dto.accountPin()))  // BCrypt 암호화
-                    .balance(dto.initialBalance())
+                    .password(passwordEncoder.encode(dto.password()))
+                    .balance(BigDecimal.ZERO)  // 초기 잔액 0원
                     .build();
 
             BankAccount savedAccount = bankAccountRepository.save(bankAccount);
 
-            // 5. Response DTO 생성
-            return new UserAccountResDto(
-                    savedUser.getId(),
-                    savedUser.getNameKr(),
-                    savedUser.getEmail(),
-                    savedUser.getPhoneNumber(),
-                    savedAccount.getId(),
+            // 5. Response 생성
+            return new AccountResponse(
                     savedAccount.getAccountNumber(),
-                    savedAccount.getBalance()
+                    "교육용 계좌",
+                    savedAccount.getBalance(),
+                    savedAccount.getCreatedAt()
             );
+
         } catch (DataIntegrityViolationException e) {
             // 동시성 문제로 인한 중복 발생 시 (최종 안전장치)
             throw new CommonException(ErrorCode.CONFLICT, "중복된 데이터가 존재합니다.");
