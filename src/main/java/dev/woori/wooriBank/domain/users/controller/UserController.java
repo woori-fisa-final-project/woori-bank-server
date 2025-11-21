@@ -24,18 +24,18 @@ public class UserController {
     /**
      * 회원 생성 + 계좌 개설 (1인 1계좌)
      *
-     * POST /api/users/{userId}/accounts
+     * POST /api/users/{externalUserId}/accounts
      *
-     * @param userId 메인 서버의 userId (다른 백엔드 서버에서 관리하는 사용자 ID)
+     * @param externalUserId 메인 서버의 userId (다른 백엔드 서버에서 관리하는 사용자 ID)
      * @param request 회원 정보 및 계좌 개설 정보
      * @return 생성된 회원 및 계좌 정보
      */
-    @PostMapping("/{userId}/accounts")
+    @PostMapping("/{externalUserId}/accounts")
     public ResponseEntity<BaseResponse<?>> createUserAccount(
-            @PathVariable String userId,
+            @PathVariable String externalUserId,
             @Valid @RequestBody CreateUserAccountReqDto request
     ) {
-        UserAccountResDto result = userAccountService.createUserWithAccount(userId, request);
+        UserAccountResDto result = userAccountService.createUserWithAccount(externalUserId, request);
         return ApiResponse.success(SuccessCode.CREATED, result);
     }
 }

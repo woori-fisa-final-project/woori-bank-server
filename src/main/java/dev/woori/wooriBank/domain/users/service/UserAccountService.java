@@ -10,6 +10,7 @@ import dev.woori.wooriBank.domain.users.dto.UserAccountResDto;
 import dev.woori.wooriBank.domain.users.entity.BankUser;
 import dev.woori.wooriBank.domain.users.repository.BankUserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,52 +37,52 @@ public class UserAccountService {
     @Transactional
     public UserAccountResDto createUserWithAccount(String externalUserId, CreateUserAccountReqDto dto) {
 
-        // 1. auth_token(메인 서버 userId) 중복 체크 - 1인 1계좌 제한
-        if (bankUserRepository.existsByAuthToken(externalUserId)) {
-            throw new CommonException(ErrorCode.CONFLICT, "이미 은행 계좌가 개설된 사용자입니다.");
+        try {
+            // 1. BankUser 생성 (메인 서버의 userId를 authToken에 저장)
+            BankUser bankUser = BankUser.builder()
+                    .nameKr(dto.nameKr())
+                    .nameEn(dto.nameEn())
+                    .email(dto.email())
+                    .phoneNumber(dto.phoneNumber())
+                    .birth(dto.birth())
+                    .authToken(externalUserId)  // 메인 서버의 userId 저장
+                    .build();
+
+            BankUser savedUser = bankUserRepository.save(bankUser);
+
+            // 2. BankAccount 생성 (계좌 비밀번호는 SHA-256 암호화)
+            BankAccount bankAccount = BankAccount.builder()
+                    .user(savedUser)
+                    .accountNumber(dto.accountNumber())
+                    .password(encoder.encode(dto.accountPassword()))  // 비밀번호 암호화
+                    .balance(dto.initialBalance())
+                    .build();
+
+            BankAccount savedAccount = bankAccountRepository.save(bankAccount);
+
+            // 3. Response DTO 생성
+            return new UserAccountResDto(
+                    savedUser.getId(),
+                    savedUser.getNameKr(),
+                    savedUser.getEmail(),
+                    savedUser.getPhoneNumber(),
+                    savedAccount.getId(),
+                    savedAccount.getAccountNumber(),
+                    savedAccount.getBalance()
+            );
+        } catch (DataIntegrityViolationException e) {
+            // 데이터베이스 unique 제약조건 위반 시 예외 처리
+            String message = e.getMessage();
+            if (message != null) {
+                if (message.contains("auth_token")) {
+                    throw new CommonException(ErrorCode.CONFLICT, "이미 은행 계좌가 개설된 사용자입니다.");
+                } else if (message.contains("email")) {
+                    throw new CommonException(ErrorCode.CONFLICT, "이미 등록된 이메일입니다.");
+                } else if (message.contains("account_number")) {
+                    throw new CommonException(ErrorCode.CONFLICT, "이미 존재하는 계좌번호입니다.");
+                }
+            }
+            throw new CommonException(ErrorCode.CONFLICT, "중복된 데이터가 존재합니다.");
         }
-
-        // 2. 이메일 중복 체크
-        if (bankUserRepository.existsByEmail(dto.email())) {
-            throw new CommonException(ErrorCode.CONFLICT, "이미 등록된 이메일입니다.");
-        }
-
-        // 3. 계좌번호 중복 체크
-        if (bankAccountRepository.existsByAccountNumber(dto.accountNumber())) {
-            throw new CommonException(ErrorCode.CONFLICT, "이미 존재하는 계좌번호입니다.");
-        }
-
-        // 4. BankUser 생성 (메인 서버의 userId를 authToken에 저장)
-        BankUser bankUser = BankUser.builder()
-                .nameKr(dto.nameKr())
-                .nameEn(dto.nameEn())
-                .email(dto.email())
-                .phoneNumber(dto.phoneNumber())
-                .birth(dto.birth())
-                .authToken(externalUserId)  // 메인 서버의 userId 저장
-                .build();
-
-        BankUser savedUser = bankUserRepository.save(bankUser);
-
-        // 5. BankAccount 생성 (계좌 비밀번호는 SHA-256 암호화)
-        BankAccount bankAccount = BankAccount.builder()
-                .user(savedUser)
-                .accountNumber(dto.accountNumber())
-                .password(encoder.encode(dto.accountPassword()))  // 비밀번호 암호화
-                .balance(dto.initialBalance())
-                .build();
-
-        BankAccount savedAccount = bankAccountRepository.save(bankAccount);
-
-        // 6. Response DTO 생성
-        return new UserAccountResDto(
-                savedUser.getId(),
-                savedUser.getNameKr(),
-                savedUser.getEmail(),
-                savedUser.getPhoneNumber(),
-                savedAccount.getId(),
-                savedAccount.getAccountNumber(),
-                savedAccount.getBalance()
-        );
     }
 }

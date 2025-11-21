@@ -10,6 +10,6 @@ public record UserAccountResDto(
         String phoneNumber,
         Long accountId,
         String accountNumber,
-        Integer balance
+        java.math.BigDecimal balance
 ) {
 }

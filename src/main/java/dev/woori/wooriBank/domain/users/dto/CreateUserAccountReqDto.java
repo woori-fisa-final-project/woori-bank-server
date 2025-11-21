@@ -37,7 +37,6 @@ public record CreateUserAccountReqDto(
         String accountPassword,
 
         @NotNull(message = "초기 입금액은 필수입니다")
-        @Min(value = 0, message = "초기 입금액은 0원 이상이어야 합니다")
-        Integer initialBalance
+        java.math.BigDecimal initialBalance
 ) {
 }
