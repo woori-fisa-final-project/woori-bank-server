@@ -7,15 +7,11 @@ import dev.woori.wooriBank.domain.auth.dto.AuthReqDto;
 import dev.woori.wooriBank.domain.auth.dto.AuthVerifyReqDto;
 import dev.woori.wooriBank.domain.auth.dto.RefreshReqDto;
 import dev.woori.wooriBank.domain.auth.dto.TokenReqDto;
-import dev.woori.wooriBank.domain.auth.entity.BankClientApp;
 import dev.woori.wooriBank.domain.auth.service.AuthService;
-import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.tomcat.util.net.openssl.ciphers.Authentication;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
 @Slf4j

@@ -16,8 +16,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.security.SecureRandom;
 import java.time.Instant;
-import java.util.Random;
 
 @Slf4j
 @Service
@@ -66,9 +66,14 @@ public class AuthService {
         return generateAndSaveToken(username, role);
     }
 
+    /**
+     * 사용자의 요청을 받아 개인정보를 임시로 저장하고 인증번호를 생성합니다.
+     * @param userId 사용자 id (혹은 redis 키값 / sessionId 같은 개념)
+     * @param request 사용자의 개인정보가 담긴 dto
+     */
     public void request(String userId, AuthReqDto request){
         // 인증번호 생성 - 랜덤 6자리
-        String authCode = String.format("%06d", new Random().nextInt(1000000));
+        String authCode = String.format("%06d", new SecureRandom().nextInt(1000000));
 
         // 사용자 정보 임시저장
         AuthSession session = AuthSession.builder()
@@ -83,9 +88,14 @@ public class AuthService {
         redis.save(userId, session);
 
         // 테스트용: 만들어진 코드를 콘솔에서 확인할 수 있도록 설정
-        log.info("authCode: {}", authCode);
+        log.debug("authCode: {}", authCode);
     }
 
+    /**
+     * 입력받은 인증번호가 올바른지 검증합니다.
+     * @param userId 사용자 id (혹은 redis 키값 / sessionId 같은 개념)
+     * @param request 사용자가 입력한 인증번호
+     */
     public void verify(String userId, AuthVerifyReqDto request){
         // 입력받은 인증번호와 저장된 인증번호 비교
         AuthSession session = redis.get(userId);
