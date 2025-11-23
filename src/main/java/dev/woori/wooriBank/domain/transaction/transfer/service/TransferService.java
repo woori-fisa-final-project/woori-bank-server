@@ -13,10 +13,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 /**
- * 입금 기능의 핵심 비즈니스 로직을 처리하는 Service 클래스.
- *
- * @Transactional: 입금 과정(계좌조회 → 잔액변경 → 거래내역 저장)이 모두 하나의 트랜잭션으로 처리됨.
- *                 중간에 오류가 나면 전체 과정을 롤백하여 데이터 일관성을 유지한다.
+ * TransferService — 포인트 현금화를 위한 안정적인 이체 서비스
+ * 1) @Transactional → 잔액 수정 + 거래내역 저장 원자성 보장
+ * 2) 비관적 락(PESSIMISTIC_WRITE) → 동시성 환경에서도 잔액 깨짐 방지
+ * 3) 데드락 방지(계좌번호 정렬 후 락 획득) → A→B, B→A 교착 문제 예방
+ * 4) 유효성 검증(동일 계좌 이체 금지) → 잘못된 요청 차단
+ * 5) 공통 거래내역 생성 메서드 → 중복 코드 제거 및 유지보수성 향상
  */
 @Slf4j
 @Service
@@ -31,7 +33,7 @@ public class TransferService {
      */
     @Transactional
     public TransferResponseDto transfer(TransferRequestDto request) {
-        // 자기 자신에게 이체하는 것 막기
+        // 0. 동일 계좌 이체 금지 (유효성 검증)
         if (request.fromAccount().equals(request.toAccount())) {
             throw new CommonException(ErrorCode.INVALID_REQUEST, "보내는 계좌와 받는 계좌가 동일할 수 없습니다.");
         }
@@ -39,50 +41,48 @@ public class TransferService {
         log.info("[입금 요청] from={} to={} amount={}",
                 request.fromAccount(), request.toAccount(), request.amount());
 
-        // 데드락 방지: 계좌번호 오름차순 기준으로 락 획득 순서 고정 ###
+        // 1. 데드락 방지: 계좌번호 오름차순 기준으로 락 획득 순서 고정
         String fromAccountNumber = request.fromAccount();
         String toAccountNumber = request.toAccount();
 
         BankAccount from;
         BankAccount to;
+        java.util.function.Supplier<CommonException> fromAccountNotFound =
+                () -> new CommonException(ErrorCode.ENTITY_NOT_FOUND, "보내는 계좌가 존재하지 않습니다.");
+        java.util.function.Supplier<CommonException> toAccountNotFound =
+                () -> new CommonException(ErrorCode.ENTITY_NOT_FOUND, "받는 계좌가 존재하지 않습니다.");
 
         if (fromAccountNumber.compareTo(toAccountNumber) < 0) {
-            from = bankAccountRepository.findAndLockByAccountNumber(fromAccountNumber)
-                    .orElseThrow(() -> new CommonException(ErrorCode.ENTITY_NOT_FOUND, "보내는 계좌가 존재하지 않습니다."));
-            to = bankAccountRepository.findAndLockByAccountNumber(toAccountNumber)
-                    .orElseThrow(() -> new CommonException(ErrorCode.ENTITY_NOT_FOUND, "받는 계좌가 존재하지 않습니다."));
+            from = bankAccountRepository.findAndLockByAccountNumber(fromAccountNumber).orElseThrow(fromAccountNotFound);
+            to = bankAccountRepository.findAndLockByAccountNumber(toAccountNumber).orElseThrow(toAccountNotFound);
         } else {
-            to = bankAccountRepository.findAndLockByAccountNumber(toAccountNumber)
-                    .orElseThrow(() -> new CommonException(ErrorCode.ENTITY_NOT_FOUND, "받는 계좌가 존재하지 않습니다."));
-            from = bankAccountRepository.findAndLockByAccountNumber(fromAccountNumber)
-                    .orElseThrow(() -> new CommonException(ErrorCode.ENTITY_NOT_FOUND, "보내는 계좌가 존재하지 않습니다."));
+            to = bankAccountRepository.findAndLockByAccountNumber(toAccountNumber).orElseThrow(toAccountNotFound);
+            from = bankAccountRepository.findAndLockByAccountNumber(fromAccountNumber).orElseThrow(fromAccountNotFound);
         }
 
-        int amount = request.amount();
+        long amount = request.amount();
 
-        // 3. 관리자 계좌에서 금액 출금
-        from.withdraw(amount);
-        // 4. 사용자 계좌에 금액 입금
-        to.deposit(amount);
+        // 2. 출금/입금 — @Transactional + 비관적 락으로 원자성 보장
+        from.withdraw(amount);// 관리자 계좌에서 금액 출금
+        to.deposit(amount);// 사용자 계좌에 금액 입금
 
-        // 5. 거래내역 생성: 관리자 계좌 → 출금 내역
+        // 3. 거래내역 기록 — 공통 메서드로 중복 제거
         createHistory(
                 from,
                 -amount,
                 "User:" + to.getAccountNumber(),
                 "포인트 출금",
                 "포인트 현금화 출금"
-        );
-
-        // 6. 거래내역 생성: 사용자 계좌 → 입금 내역
+        ); // 관리자 계좌 → 출금 내역
         createHistory(
                 to,
                 amount,
                 "Admin:" + from.getAccountNumber(),
                 "포인트 입금",
                 "포인트 현금화 입금"
-        );
+        );// 사용자 계좌 → 입금 내역
 
+        // 4. 응답 반환
         return TransferResponseDto.builder()
                 .fromAccount(from.getAccountNumber())
                 .toAccount(to.getAccountNumber())
@@ -90,13 +90,11 @@ public class TransferService {
                 .message("이체가 성공적으로 처리되었습니다.")
                 .build();
     }
-    /**
-     * 거래 내역 생성 공통 메서드
-     * 중복된 빌더 + save 로직 제거
-     */
+
+    // 공통 거래내역 생성 메서드
     private void createHistory(
             BankAccount account,
-            int amount,
+            long amount,
             String counterparty,
             String displayName,
             String description
@@ -104,7 +102,7 @@ public class TransferService {
         historyRepository.save(
                 BankTransactionHistory.builder()
                         .account(account)
-                        .amount(amount)
+                        .amount((int) amount)
                         .counterpartyName(counterparty)
                         .displayName(displayName)
                         .description(description)
