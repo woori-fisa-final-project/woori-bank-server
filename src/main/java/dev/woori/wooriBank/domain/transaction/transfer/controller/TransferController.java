@@ -35,11 +35,10 @@ public class TransferController {
 
     @PostMapping("/transfer")
     public ResponseEntity<TransferResponseDto> transfer(@Valid @RequestBody TransferRequestDto request) {
-        TransferResponseDto response = transferService.transfer(request); // DepositService에 입금 처리 위임
-
         //디버깅 및 추적용
         log.info("[계좌이체 요청]: {}", request);
 
+        TransferResponseDto response = transferService.transfer(request); // DepositService에 입금 처리 위임
         return ResponseEntity.ok(response); // 200 OK + 입금 결과 반환
     }
 }

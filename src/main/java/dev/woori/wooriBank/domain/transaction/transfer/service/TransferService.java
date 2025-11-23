@@ -25,7 +25,6 @@ public class TransferService {
 
     private final BankAccountRepository bankAccountRepository;
     private final BankTransactionHistoryRepository historyRepository;
-
     /**
      * 포인트 현금화 이체 기능
      * fromAccount → toAccount 로 금액 이동
@@ -34,33 +33,35 @@ public class TransferService {
     public TransferResponseDto transfer(TransferRequestDto request) {
         // 자기 자신에게 이체하는 것 막기
         if (request.fromAccount().equals(request.toAccount())) {
-            throw new IllegalArgumentException("보내는 계좌와 받는 계좌가 동일할 수 없습니다.");
+            throw new CommonException(ErrorCode.INVALID_REQUEST, "보내는 계좌와 받는 계좌가 동일할 수 없습니다.");
         }
 
         log.info("[입금 요청] from={} to={} amount={}",
                 request.fromAccount(), request.toAccount(), request.amount());
 
-        // 1. 보내는 계좌(관리자 계좌) + 락
-        BankAccount from = bankAccountRepository
-                .findAndLockByAccountNumber(request.fromAccount())
-                .orElseThrow(() -> new CommonException(
-                        ErrorCode.ENTITY_NOT_FOUND,
-                        "보내는 계좌가 존재하지 않습니다."
-                ));
+        // 데드락 방지: 계좌번호 오름차순 기준으로 락 획득 순서 고정 ###
+        String fromAccountNumber = request.fromAccount();
+        String toAccountNumber = request.toAccount();
 
-        // 2. 받는 계좌(사용자 계좌) 조회 + 락
-        BankAccount to = bankAccountRepository
-                .findAndLockByAccountNumber(request.toAccount())
-                .orElseThrow(() -> new CommonException(
-                        ErrorCode.ENTITY_NOT_FOUND,
-                        "받는 계좌가 존재하지 않습니다."
-                ));
+        BankAccount from;
+        BankAccount to;
+
+        if (fromAccountNumber.compareTo(toAccountNumber) < 0) {
+            from = bankAccountRepository.findAndLockByAccountNumber(fromAccountNumber)
+                    .orElseThrow(() -> new CommonException(ErrorCode.ENTITY_NOT_FOUND, "보내는 계좌가 존재하지 않습니다."));
+            to = bankAccountRepository.findAndLockByAccountNumber(toAccountNumber)
+                    .orElseThrow(() -> new CommonException(ErrorCode.ENTITY_NOT_FOUND, "받는 계좌가 존재하지 않습니다."));
+        } else {
+            to = bankAccountRepository.findAndLockByAccountNumber(toAccountNumber)
+                    .orElseThrow(() -> new CommonException(ErrorCode.ENTITY_NOT_FOUND, "받는 계좌가 존재하지 않습니다."));
+            from = bankAccountRepository.findAndLockByAccountNumber(fromAccountNumber)
+                    .orElseThrow(() -> new CommonException(ErrorCode.ENTITY_NOT_FOUND, "보내는 계좌가 존재하지 않습니다."));
+        }
 
         int amount = request.amount();
 
         // 3. 관리자 계좌에서 금액 출금
         from.withdraw(amount);
-
         // 4. 사용자 계좌에 금액 입금
         to.deposit(amount);
 
