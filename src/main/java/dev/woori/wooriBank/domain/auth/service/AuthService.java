@@ -30,6 +30,7 @@ public class AuthService {
     private final JwtValidator jwtValidator;
     private final RefreshTokenPort refreshTokenRepository;
     private final AuthStoreRedis redis;
+    private static final SecureRandom random = new SecureRandom();
 
     /**
      * name에 따른 token을 발급합니다.
@@ -73,7 +74,7 @@ public class AuthService {
      */
     public void request(String userId, AuthReqDto request){
         // 인증번호 생성 - 랜덤 6자리
-        String authCode = String.format("%06d", new SecureRandom().nextInt(1000000));
+        String authCode = String.format("%06d", random.nextInt(1000000));
 
         // 사용자 정보 임시저장
         AuthSession session = AuthSession.builder()
@@ -82,6 +83,7 @@ public class AuthService {
                 .phone(request.phone())
                 .birth(request.birth())
                 .authCode(authCode)
+                .failedAttempts(0)
                 .verified(false)
                 .build();
 
@@ -106,6 +108,12 @@ public class AuthService {
         }
 
         if(!request.authCode().equals(session.getAuthCode())){
+            // 일정 횟수 이상 실패했을 경우
+            if(session.getFailedAttempts() >= 5){
+                redis.delete(userId); // 세션 삭제
+                throw new CommonException(ErrorCode.FORBIDDEN, "인증번호 검증에 실패했습니다. 인증번호를 다시 발급해 주세요.");
+            }
+            session.setFailedAttempts(session.getFailedAttempts() + 1);
             throw new CommonException(ErrorCode.UNAUTHORIZED, "인증번호가 일치하지 않습니다.");
         }
 

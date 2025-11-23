@@ -2,6 +2,8 @@ package dev.woori.wooriBank.config;
 
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
+import dev.woori.wooriBank.domain.auth.dto.AuthSession;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.context.annotation.Bean;
@@ -38,7 +40,10 @@ public class RedisConfig {
         // NON_FINAL: final이 아닌 모든 클래스에 대해 타입 정보 포함
         // JsonTypeInfo.As.PROPERTY: JSON에 타입 정보 삽입
         ObjectMapper objectMapper = new ObjectMapper();
-        objectMapper.activateDefaultTyping(instance, ObjectMapper.DefaultTyping.NON_FINAL, JsonTypeInfo.As.PROPERTY);
+        var ptv = BasicPolymorphicTypeValidator.builder()
+                        .allowIfBaseType(AuthSession.class) // AuthSession 클래스에 대해서만 역직렬화 허용
+                                .build();
+        objectMapper.activateDefaultTyping(ptv, ObjectMapper.DefaultTyping.NON_FINAL, JsonTypeInfo.As.PROPERTY);
 
         template.setConnectionFactory(redisConnectionFactory());
 
