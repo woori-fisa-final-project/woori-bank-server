@@ -1,5 +1,7 @@
 package dev.woori.wooriBank.domain.transaction.transfer.service;
 
+import dev.woori.wooriBank.config.exception.CommonException;
+import dev.woori.wooriBank.config.exception.ErrorCode;
 import dev.woori.wooriBank.domain.account.entity.BankAccount;
 import dev.woori.wooriBank.domain.account.repository.BankAccountRepository;
 import dev.woori.wooriBank.domain.transaction.transfer.dto.TransferRequestDto;
@@ -10,7 +12,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 /**
  * 입금 기능의 핵심 비즈니스 로직을 처리하는 Service 클래스.
  *
@@ -31,19 +32,29 @@ public class TransferService {
      */
     @Transactional
     public TransferResponseDto transfer(TransferRequestDto request) {
+        // 자기 자신에게 이체하는 것 막기
+        if (request.fromAccount().equals(request.toAccount())) {
+            throw new IllegalArgumentException("보내는 계좌와 받는 계좌가 동일할 수 없습니다.");
+        }
 
-        log.info("[계좌이체 요청] from={} to={} amount={}",
+        log.info("[입금 요청] from={} to={} amount={}",
                 request.fromAccount(), request.toAccount(), request.amount());
 
         // 1. 보내는 계좌(관리자 계좌) + 락
         BankAccount from = bankAccountRepository
                 .findAndLockByAccountNumber(request.fromAccount())
-                .orElseThrow(() -> new IllegalArgumentException("보내는 계좌가 존재하지 않습니다."));
+                .orElseThrow(() -> new CommonException(
+                        ErrorCode.ENTITY_NOT_FOUND,
+                        "보내는 계좌가 존재하지 않습니다."
+                ));
 
         // 2. 받는 계좌(사용자 계좌) 조회 + 락
         BankAccount to = bankAccountRepository
                 .findAndLockByAccountNumber(request.toAccount())
-                .orElseThrow(() -> new IllegalArgumentException("받는 계좌가 존재하지 않습니다."));
+                .orElseThrow(() -> new CommonException(
+                        ErrorCode.ENTITY_NOT_FOUND,
+                        "받는 계좌가 존재하지 않습니다."
+                ));
 
         int amount = request.amount();
 
@@ -54,25 +65,21 @@ public class TransferService {
         to.deposit(amount);
 
         // 5. 거래내역 생성: 관리자 계좌 → 출금 내역
-        historyRepository.save(
-                BankTransactionHistory.builder()
-                        .account(from)
-                        .amount(-amount)
-                        .counterpartyName("User:" + to.getAccountNumber())
-                        .displayName("포인트 출금")
-                        .description("포인트 현금화 출금")
-                        .build()
+        createHistory(
+                from,
+                -amount,
+                "User:" + to.getAccountNumber(),
+                "포인트 출금",
+                "포인트 현금화 출금"
         );
 
         // 6. 거래내역 생성: 사용자 계좌 → 입금 내역
-        historyRepository.save(
-                BankTransactionHistory.builder()
-                        .account(to)
-                        .amount(amount)
-                        .counterpartyName("Admin:" + from.getAccountNumber())
-                        .displayName("포인트 입금")
-                        .description("포인트 현금화 입금")
-                        .build()
+        createHistory(
+                to,
+                amount,
+                "Admin:" + from.getAccountNumber(),
+                "포인트 입금",
+                "포인트 현금화 입금"
         );
 
         return TransferResponseDto.builder()
@@ -81,5 +88,26 @@ public class TransferService {
                 .amount(amount)
                 .message("이체가 성공적으로 처리되었습니다.")
                 .build();
+    }
+    /**
+     * 거래 내역 생성 공통 메서드
+     * 중복된 빌더 + save 로직 제거
+     */
+    private void createHistory(
+            BankAccount account,
+            int amount,
+            String counterparty,
+            String displayName,
+            String description
+    ) {
+        historyRepository.save(
+                BankTransactionHistory.builder()
+                        .account(account)
+                        .amount(amount)
+                        .counterpartyName(counterparty)
+                        .displayName(displayName)
+                        .description(description)
+                        .build()
+        );
     }
 }

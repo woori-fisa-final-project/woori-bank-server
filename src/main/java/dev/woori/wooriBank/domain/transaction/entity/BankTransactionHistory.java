@@ -40,11 +40,4 @@ public class BankTransactionHistory {
 
     @Column(length = 50)
     private String description;
-
-//    @PrePersist
-//    public void onPrePersist() {
-//        if (transactionDate == null) {
-//            transactionDate = LocalDateTime.now();
-//        }
-//    }
 }

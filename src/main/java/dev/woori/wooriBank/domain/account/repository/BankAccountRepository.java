@@ -29,7 +29,7 @@ public interface BankAccountRepository extends JpaRepository<BankAccount, Long> 
      * => 잔액 차감/증가 등 '동시성 충돌 위험'이 있는 수정 트랜잭션에서만 사용
      *
      * @param accountNumber 계좌번호
-     * @return Optional<EducationalAccount>
+     * @return Optional<BankAccount>
      */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT b FROM BankAccount b WHERE b.accountNumber = :accountNumber")

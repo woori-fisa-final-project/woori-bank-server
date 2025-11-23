@@ -12,10 +12,10 @@ import org.springframework.web.bind.annotation.*;
 /**
  * 입금 기능을 외부에서 호출할 수 있게 해주는 REST API 컨트롤러.
  *
- * "/api/deposit" 경로로 POST 요청이 들어오면 입금 처리 실행.
+ * "/api/transfer" 경로로 POST 요청이 들어오면 입금 처리 실행.
  *
  * Controller → Service 로 요청을 전달하고
- * Service에서 반환한 DepositResponseDto를 HTTP Response로 반환한다.
+ * Service에서 반환한 TransferResponseDto를 HTTP Response로 반환한다.
  */
 @Slf4j
 @RestController
