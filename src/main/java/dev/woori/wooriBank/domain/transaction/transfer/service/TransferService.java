@@ -102,7 +102,7 @@ public class TransferService {
         historyRepository.save(
                 BankTransactionHistory.builder()
                         .account(account)
-                        .amount((int) amount)
+                        .amount(Math.toIntExact((long) amount))
                         .counterpartyName(counterparty)
                         .displayName(displayName)
                         .description(description)
