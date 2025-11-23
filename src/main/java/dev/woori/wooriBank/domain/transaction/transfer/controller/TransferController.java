@@ -3,7 +3,9 @@ package dev.woori.wooriBank.domain.transaction.transfer.controller;
 import dev.woori.wooriBank.domain.transaction.transfer.dto.TransferRequestDto;
 import dev.woori.wooriBank.domain.transaction.transfer.dto.TransferResponseDto;
 import dev.woori.wooriBank.domain.transaction.transfer.service.TransferService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -15,7 +17,7 @@ import org.springframework.web.bind.annotation.*;
  * Controller → Service 로 요청을 전달하고
  * Service에서 반환한 DepositResponseDto를 HTTP Response로 반환한다.
  */
-
+@Slf4j
 @RestController
 @RequestMapping("/api")
 @RequiredArgsConstructor
@@ -23,15 +25,21 @@ public class TransferController {
 
     private final TransferService transferService;
 
+
     /**
-     * POST /api/deposit
-     *
-     * 요청 바디(JSON)를 DepositRequestDto로 받아 입금 처리.
+     *      입금 실행
+     *      POST /api/transfer
+     *      - 요청 Body: TransferRequestDto(JSON)
+     *      - 응답 Body: TransferResponseDto(JSON)
      */
 
     @PostMapping("/transfer")
-    public ResponseEntity<TransferResponseDto> transfer(@RequestBody TransferRequestDto request) {
+    public ResponseEntity<TransferResponseDto> transfer(@Valid @RequestBody TransferRequestDto request) {
         TransferResponseDto response = transferService.transfer(request); // DepositService에 입금 처리 위임
+
+        //디버깅 및 추적용
+        log.info("[계좌이체 요청]: {}", request);
+
         return ResponseEntity.ok(response); // 200 OK + 입금 결과 반환
     }
 }

@@ -7,6 +7,7 @@ import dev.woori.wooriBank.domain.transaction.transfer.dto.TransferResponseDto;
 import dev.woori.wooriBank.domain.transaction.transfer.repository.BankTransactionHistoryRepository;
 import dev.woori.wooriBank.domain.transaction.entity.BankTransactionHistory;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,7 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
  * @Transactional: 입금 과정(계좌조회 → 잔액변경 → 거래내역 저장)이 모두 하나의 트랜잭션으로 처리됨.
  *                 중간에 오류가 나면 전체 과정을 롤백하여 데이터 일관성을 유지한다.
  */
-
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class TransferService {
@@ -31,17 +32,20 @@ public class TransferService {
     @Transactional
     public TransferResponseDto transfer(TransferRequestDto request) {
 
-        // 1. 보내는 계좌(관리자 계좌) 조회
+        log.info("[계좌이체 요청] from={} to={} amount={}",
+                request.fromAccount(), request.toAccount(), request.amount());
+
+        // 1. 보내는 계좌(관리자 계좌) + 락
         BankAccount from = bankAccountRepository
-                .findByAccountNumber(request.getFromAccount())
+                .findAndLockByAccountNumber(request.fromAccount())
                 .orElseThrow(() -> new IllegalArgumentException("보내는 계좌가 존재하지 않습니다."));
 
-        // 2. 받는 계좌(사용자 계좌) 조회
+        // 2. 받는 계좌(사용자 계좌) 조회 + 락
         BankAccount to = bankAccountRepository
-                .findByAccountNumber(request.getToAccount())
+                .findAndLockByAccountNumber(request.toAccount())
                 .orElseThrow(() -> new IllegalArgumentException("받는 계좌가 존재하지 않습니다."));
 
-        Integer amount = request.getAmount();
+        int amount = request.amount();
 
         // 3. 관리자 계좌에서 금액 출금
         from.withdraw(amount);
