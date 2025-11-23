@@ -13,6 +13,7 @@ import dev.woori.wooriBank.domain.auth.port.RefreshTokenPort;
 import dev.woori.wooriBank.domain.auth.entity.Role;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,6 +32,8 @@ public class AuthService {
     private final RefreshTokenPort refreshTokenRepository;
     private final AuthStoreRedis redis;
     private static final SecureRandom random = new SecureRandom();
+    @Value("${auth.verification.max-attempts}")
+    private int maxAttempts;
 
     /**
      * name에 따른 token을 발급합니다.
@@ -109,11 +112,12 @@ public class AuthService {
 
         if(!request.authCode().equals(session.getAuthCode())){
             // 일정 횟수 이상 실패했을 경우
-            if(session.getFailedAttempts() >= 5){
+            if(session.getFailedAttempts() >= maxAttempts){
                 redis.delete(userId); // 세션 삭제
                 throw new CommonException(ErrorCode.FORBIDDEN, "인증번호 검증에 실패했습니다. 인증번호를 다시 발급해 주세요.");
             }
             session.setFailedAttempts(session.getFailedAttempts() + 1);
+            redis.save(userId, session); // 실패 횟수 업데이트
             throw new CommonException(ErrorCode.UNAUTHORIZED, "인증번호가 일치하지 않습니다.");
         }
 
