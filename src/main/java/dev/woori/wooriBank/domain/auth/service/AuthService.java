@@ -5,8 +5,8 @@ import dev.woori.wooriBank.config.exception.ErrorCode;
 import dev.woori.wooriBank.config.jwt.JwtInfo;
 import dev.woori.wooriBank.config.jwt.JwtValidator;
 import dev.woori.wooriBank.config.security.Encoder;
-import dev.woori.wooriBank.domain.auth.dto.TokenResDto;
-import dev.woori.wooriBank.domain.auth.dto.RefreshReqDto;
+import dev.woori.wooriBank.domain.auth.dto.*;
+import dev.woori.wooriBank.domain.auth.entity.AuthStoreRedis;
 import dev.woori.wooriBank.domain.auth.entity.RefreshToken;
 import dev.woori.wooriBank.domain.auth.jwt.JwtIssuer;
 import dev.woori.wooriBank.domain.auth.port.RefreshTokenPort;
@@ -17,6 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.Random;
 
 @Slf4j
 @Service
@@ -28,6 +29,7 @@ public class AuthService {
     private final JwtIssuer jwtIssuer;
     private final JwtValidator jwtValidator;
     private final RefreshTokenPort refreshTokenRepository;
+    private final AuthStoreRedis redis;
 
     /**
      * name에 따른 token을 발급합니다.
@@ -62,6 +64,44 @@ public class AuthService {
 
         // 검증 끝나면 access token/refresh token 생성해서 return
         return generateAndSaveToken(username, role);
+    }
+
+    public void request(String userId, AuthReqDto request){
+        // 인증번호 생성 - 랜덤 6자리
+        String authCode = String.format("%06d", new Random().nextInt(1000000));
+
+        // 사용자 정보 임시저장
+        AuthSession session = AuthSession.builder()
+                .id(userId)
+                .name(request.name())
+                .phone(request.phone())
+                .birth(request.birth())
+                .authCode(authCode)
+                .verified(false)
+                .build();
+
+        redis.save(userId, session);
+
+        // 테스트용: 만들어진 코드를 콘솔에서 확인할 수 있도록 설정
+        log.info("authCode: {}", authCode);
+    }
+
+    public void verify(String userId, AuthVerifyReqDto request){
+        // 입력받은 인증번호와 저장된 인증번호 비교
+        AuthSession session = redis.get(userId);
+
+        // 시간만료 등의 이유로 데이터가 사라진 경우
+        if(session == null){
+            throw new CommonException(ErrorCode.ENTITY_NOT_FOUND, "데이터를 찾을 수 없습니다.");
+        }
+
+        if(!request.authCode().equals(session.getAuthCode())){
+            throw new CommonException(ErrorCode.UNAUTHORIZED, "인증번호가 일치하지 않습니다.");
+        }
+
+        // 인증에 성공하면 verified 상태로 전환
+        session.setVerified(true);
+        redis.save(userId, session);
     }
 
     public TokenResDto generateAndSaveToken(String username, Role role){
