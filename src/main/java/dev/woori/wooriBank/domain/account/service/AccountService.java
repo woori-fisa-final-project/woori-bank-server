@@ -160,16 +160,21 @@ public class AccountService {
             throw new CommonException(ErrorCode.INVALID_REQUEST, "생년월일은 필수입니다.");
         }
 
+        // 공백 제거 후 파싱
+        String trimmedBirth = birth.trim();
+
         try {
-            if (birth.length() == 8) {
-                // YYYYMMDD 형식
-                return LocalDate.parse(birth, DateTimeFormatter.ofPattern("yyyyMMdd"));
-            } else {
+            // '-' 포함 여부로 형식 구분 (더 안정적)
+            if (trimmedBirth.contains("-")) {
                 // YYYY-MM-DD 형식
-                return LocalDate.parse(birth, DateTimeFormatter.ISO_LOCAL_DATE);
+                return LocalDate.parse(trimmedBirth, DateTimeFormatter.ISO_LOCAL_DATE);
+            } else {
+                // YYYYMMDD 형식
+                return LocalDate.parse(trimmedBirth, DateTimeFormatter.ofPattern("yyyyMMdd"));
             }
         } catch (DateTimeParseException e) {
-            throw new CommonException(ErrorCode.INVALID_REQUEST, "생년월일 형식이 올바르지 않습니다.");
+            throw new CommonException(ErrorCode.INVALID_REQUEST,
+                    "생년월일 형식이 올바르지 않습니다. (지원 형식: YYYYMMDD 또는 YYYY-MM-DD)");
         }
     }
 }
