@@ -41,7 +41,7 @@ public class AccountService {
      */
     public void submitTerms(String userId, TermsSubmitReqDto request) {
         AuthSession session = getSessionOrThrow(userId);
-        validateVerified(session);
+        session.validateVerified();
 
         // 약관 동의 상태 업데이트
         session.setTermsAgreed(request.termsAgreed());
@@ -58,8 +58,8 @@ public class AccountService {
      */
     public void submitAccountForm(String userId, AccountFormReqDto request) {
         AuthSession session = getSessionOrThrow(userId);
-        validateVerified(session);
-        validateTermsAgreed(session);
+        session.validateVerified();
+        session.validateTermsAgreed();
 
         // 추가 정보 업데이트
         session.setEmail(request.email());
@@ -79,9 +79,9 @@ public class AccountService {
      */
     public UserAccountResDto createAccount(String userId, AccountCreateReqDto request) {
         AuthSession session = getSessionOrThrow(userId);
-        validateVerified(session);
-        validateTermsAgreed(session);
-        validateAccountFormCompleted(session);
+        session.validateVerified();
+        session.validateTermsAgreed();
+        session.validateAccountFormCompleted();
 
         // 4. Redis 세션 정보를 CreateUserAccountReqDto로 변환
         LocalDate birthDate = parseBirth(session.getBirth());
@@ -118,33 +118,6 @@ public class AccountService {
                     "세션이 만료되었습니다. 처음부터 다시 시작해주세요.");
         }
         return session;
-    }
-
-    /**
-     * 본인인증 완료 여부 검증
-     */
-    private void validateVerified(AuthSession session) {
-        if (!session.isVerified()) {
-            throw new CommonException(ErrorCode.FORBIDDEN, "본인인증을 먼저 완료해야 합니다.");
-        }
-    }
-
-    /**
-     * 약관 동의 완료 여부 검증
-     */
-    private void validateTermsAgreed(AuthSession session) {
-        if (session.getTermsAgreed() == null || !session.getTermsAgreed()) {
-            throw new CommonException(ErrorCode.FORBIDDEN, "약관 동의를 먼저 완료해야 합니다.");
-        }
-    }
-
-    /**
-     * 추가 정보 입력 완료 여부 검증
-     */
-    private void validateAccountFormCompleted(AuthSession session) {
-        if (session.getEmail() == null || session.getInitialBalance() == null) {
-            throw new CommonException(ErrorCode.FORBIDDEN, "추가 정보를 먼저 입력해야 합니다.");
-        }
     }
 
     /**
