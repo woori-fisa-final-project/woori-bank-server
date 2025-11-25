@@ -6,6 +6,7 @@ import dev.woori.wooriBank.config.jwt.JwtInfo;
 import dev.woori.wooriBank.config.jwt.JwtValidator;
 import dev.woori.wooriBank.config.security.Encoder;
 import dev.woori.wooriBank.domain.auth.dto.*;
+import dev.woori.wooriBank.domain.auth.entity.AuthSession;
 import dev.woori.wooriBank.domain.auth.entity.AuthStoreRedis;
 import dev.woori.wooriBank.domain.auth.entity.RefreshToken;
 import dev.woori.wooriBank.domain.auth.jwt.JwtIssuer;
