@@ -41,7 +41,9 @@ public class RedisConfig {
         // JsonTypeInfo.As.PROPERTY: JSON에 타입 정보 삽입
         ObjectMapper objectMapper = new ObjectMapper();
         var ptv = BasicPolymorphicTypeValidator.builder()
-                        .allowIfBaseType(AuthSession.class) // AuthSession 클래스에 대해서만 역직렬화 허용
+                        .allowIfBaseType(AuthSession.class) // AuthSession 클래스 허용
+                        .allowIfSubType("java.math.BigDecimal") // BigDecimal 허용
+                        .allowIfSubType("java.time.*") // LocalDate, LocalDateTime 등 허용
                                 .build();
         objectMapper.activateDefaultTyping(ptv, ObjectMapper.DefaultTyping.NON_FINAL, JsonTypeInfo.As.PROPERTY);
 

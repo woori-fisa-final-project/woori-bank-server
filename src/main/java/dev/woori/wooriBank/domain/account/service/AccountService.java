@@ -16,6 +16,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 
 /**
  * 계좌 개설 프로세스 서비스 (3단계)
@@ -148,6 +149,10 @@ public class AccountService {
 
     /**
      * 생년월일 문자열(YYYYMMDD 또는 YYYY-MM-DD)을 LocalDate로 변환
+     *
+     * @param birth 생년월일 문자열 (YYYYMMDD 또는 YYYY-MM-DD)
+     * @return LocalDate 객체
+     * @throws CommonException 생년월일 형식이 올바르지 않을 때
      */
     private LocalDate parseBirth(String birth) {
         try {
@@ -158,7 +163,7 @@ public class AccountService {
                 // YYYY-MM-DD 형식
                 return LocalDate.parse(birth, DateTimeFormatter.ISO_LOCAL_DATE);
             }
-        } catch (Exception e) {
+        } catch (DateTimeParseException e) {
             throw new CommonException(ErrorCode.INVALID_REQUEST, "생년월일 형식이 올바르지 않습니다.");
         }
     }

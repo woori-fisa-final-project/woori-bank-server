@@ -5,6 +5,7 @@ import dev.woori.wooriBank.config.exception.ErrorCode;
 import dev.woori.wooriBank.domain.account.dto.response.UserAccountResDto;
 import dev.woori.wooriBank.domain.account.entity.BankAccount;
 import dev.woori.wooriBank.domain.account.repository.BankAccountRepository;
+import dev.woori.wooriBank.domain.account.util.AccountNumberGenerator;
 import dev.woori.wooriBank.domain.users.dto.CreateUserAccountReqDto;
 import dev.woori.wooriBank.domain.users.entity.BankUser;
 import dev.woori.wooriBank.domain.users.repository.BankUserRepository;
@@ -13,8 +14,6 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * 회원 생성 및 계좌 개설 서비스
@@ -27,6 +26,7 @@ public class UserAccountService {
     private final BankUserRepository bankUserRepository;
     private final BankAccountRepository bankAccountRepository;
     private final PasswordEncoder passwordEncoder;
+    private final AccountNumberGenerator accountNumberGenerator;
 
     /**
      * 회원 생성 + 계좌 개설 (1인 1계좌)
@@ -62,7 +62,7 @@ public class UserAccountService {
             BankUser savedUser = bankUserRepository.save(bankUser);
 
             // 3. 계좌번호 자동 생성
-            String accountNumber = generateAccountNumber();
+            String accountNumber = accountNumberGenerator.generate();
 
             // 4. BankAccount 생성 (계좌 PIN은 BCrypt 암호화)
             BankAccount bankAccount = BankAccount.builder()
@@ -88,29 +88,5 @@ public class UserAccountService {
             // 동시성 문제로 인한 중복 발생 시 (최종 안전장치)
             throw new CommonException(ErrorCode.CONFLICT, "중복된 데이터가 존재합니다.");
         }
-    }
-
-    /**
-     * 계좌번호 자동 생성 (1002-999-XXXXXX)
-     * 중복 체크를 통해 유니크한 계좌번호 보장
-     * ThreadLocalRandom과 while 루프 사용으로 성능 및 안정성 개선
-     */
-    private String generateAccountNumber() {
-        String prefix = "1002-999-";
-        String accountNumber;
-        int attempts = 0;
-        final int MAX_ATTEMPTS = 100; // 무한 루프 방지
-
-        do {
-            if (attempts++ > MAX_ATTEMPTS) {
-                throw new CommonException(ErrorCode.INTERNAL_SERVER_ERROR,
-                    "계좌번호 생성에 실패했습니다. 잠시 후 다시 시도해주세요.");
-            }
-            String random = String.format("%06d",
-                ThreadLocalRandom.current().nextInt(1000000));
-            accountNumber = prefix + random;
-        } while (bankAccountRepository.existsByAccountNumber(accountNumber));
-
-        return accountNumber;
     }
 }

@@ -7,6 +7,8 @@ import dev.woori.wooriBank.domain.users.entity.BankUser;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.math.BigDecimal;
+
 @Entity
 @Table(name = "bank_account")
 @Getter
@@ -26,20 +28,29 @@ public class BankAccount extends BaseEntity {
     @Column(name = "account_number", nullable = false, unique = true, length = 20)
     private String accountNumber;
 
-    @Column(nullable = false, length = 4)
+    @Column(nullable = false, length = 60)
     private String password;
 
-    @Column(nullable = false)
-    private Integer balance;
+    @Column(nullable = false, precision = 15, scale = 2)
+    private BigDecimal balance;
 
-    public void deposit(int amount) {
-        this.balance += amount;
+    /**
+     * 입금 처리
+     * @param amount 입금액 (BigDecimal)
+     */
+    public void deposit(BigDecimal amount) {
+        this.balance = this.balance.add(amount);
     }
 
-    public void withdraw(int amount) {
-        if(this.balance - amount < 0) {
+    /**
+     * 출금 처리
+     * @param amount 출금액 (BigDecimal)
+     * @throws CommonException 잔액 부족 시
+     */
+    public void withdraw(BigDecimal amount) {
+        if (this.balance.compareTo(amount) < 0) {
             throw new CommonException(ErrorCode.INVALID_REQUEST, "잔액이 부족합니다.");
         }
-        this.balance -= amount;
+        this.balance = this.balance.subtract(amount);
     }
 }
