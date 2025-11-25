@@ -128,23 +128,20 @@ public class AccountService {
      * @throws CommonException birth가 null이거나 빈 문자열일 때, 또는 형식이 올바르지 않을 때
      */
     private LocalDate parseBirth(String birth) {
-        // null 또는 빈 문자열 검증
-        if (birth == null || birth.trim().isEmpty()) {
+        // null 또는 빈 문자열 검증 (Java 11+)
+        if (birth == null || birth.isBlank()) {
             throw new CommonException(ErrorCode.INVALID_REQUEST, "생년월일은 필수입니다.");
         }
 
-        // 공백 제거 후 파싱
         String trimmedBirth = birth.trim();
 
         try {
-            // '-' 포함 여부로 형식 구분 (더 안정적)
-            if (trimmedBirth.contains("-")) {
-                // YYYY-MM-DD 형식
-                return LocalDate.parse(trimmedBirth, DateTimeFormatter.ISO_LOCAL_DATE);
-            } else {
-                // YYYYMMDD 형식
-                return LocalDate.parse(trimmedBirth, DateTimeFormatter.ofPattern("yyyyMMdd"));
-            }
+            // '-' 포함 여부로 형식 구분하여 DateTimeFormatter 선택
+            DateTimeFormatter formatter = trimmedBirth.contains("-")
+                    ? DateTimeFormatter.ISO_LOCAL_DATE       // YYYY-MM-DD
+                    : DateTimeFormatter.ofPattern("yyyyMMdd"); // YYYYMMDD
+
+            return LocalDate.parse(trimmedBirth, formatter);
         } catch (DateTimeParseException e) {
             throw new CommonException(ErrorCode.INVALID_REQUEST,
                     "생년월일 형식이 올바르지 않습니다. (지원 형식: YYYYMMDD 또는 YYYY-MM-DD)");
