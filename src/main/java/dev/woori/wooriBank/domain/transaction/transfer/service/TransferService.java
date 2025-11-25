@@ -45,7 +45,7 @@ public class TransferService {
             throw new CommonException(ErrorCode.INVALID_REQUEST, "보내는 계좌와 받는 계좌가 동일할 수 없습니다.");
         }
 
-        log.info("[입금 요청] from={} to={} amount={}",
+        log.info("[계좌 이체] from={} to={} amount={}",
                 request.fromAccount(), request.toAccount(), request.amount());
 
         // 1. 데드락 방지: 계좌번호 오름차순 기준으로 락 획득 순서 고정
