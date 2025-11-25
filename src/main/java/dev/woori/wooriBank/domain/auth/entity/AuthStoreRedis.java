@@ -1,6 +1,5 @@
 package dev.woori.wooriBank.domain.auth.entity;
 
-import dev.woori.wooriBank.domain.auth.dto.AuthSession;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.RedisTemplate;

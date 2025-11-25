@@ -2,11 +2,13 @@ package dev.woori.wooriBank.domain.account.service;
 
 import dev.woori.wooriBank.config.exception.CommonException;
 import dev.woori.wooriBank.config.exception.ErrorCode;
+import dev.woori.wooriBank.domain.account.dto.AccountLookupReqDto;
+import dev.woori.wooriBank.domain.account.dto.AccountLookupResDto;
 import dev.woori.wooriBank.domain.account.dto.request.AccountCreateReqDto;
 import dev.woori.wooriBank.domain.account.dto.request.AccountFormReqDto;
 import dev.woori.wooriBank.domain.account.dto.request.TermsSubmitReqDto;
 import dev.woori.wooriBank.domain.account.dto.response.UserAccountResDto;
-import dev.woori.wooriBank.domain.auth.dto.AuthSession;
+import dev.woori.wooriBank.domain.auth.entity.AuthSession;
 import dev.woori.wooriBank.domain.auth.entity.AuthStoreRedis;
 import dev.woori.wooriBank.domain.users.dto.CreateUserAccountReqDto;
 import dev.woori.wooriBank.domain.users.service.UserAccountService;
@@ -23,6 +25,7 @@ import java.time.format.DateTimeParseException;
  * 1. POST /api/terms/submit - 약관 동의
  * 2. POST /api/account/form - 추가 정보 입력
  * 3. POST /api/account/create - 계좌 개설
+ * 4. POST /api/account/lookup - 계좌 조회
  * Redis 세션을 통해 단계별 정보를 저장하고 최종적으로 계좌를 개설
  */
 @Slf4j
@@ -36,7 +39,7 @@ public class AccountService {
     /**
      * 1단계: 약관 동의 처리
      *
-     * @param userId 사용자 ID (JWT에서 추출)
+     * @param userId  사용자 ID (JWT에서 추출)
      * @param request 약관 동의 정보
      */
     public void submitTerms(String userId, TermsSubmitReqDto request) {
@@ -53,7 +56,7 @@ public class AccountService {
     /**
      * 2단계: 추가 정보 입력 처리
      *
-     * @param userId 사용자 ID (JWT에서 추출)
+     * @param userId  사용자 ID (JWT에서 추출)
      * @param request 추가 정보 (이메일, 영문 이름, 초기 입금액)
      */
     public void submitAccountForm(String userId, AccountFormReqDto request) {
@@ -73,7 +76,7 @@ public class AccountService {
     /**
      * 3단계: 계좌 개설 (최종 단계)
      *
-     * @param userId 사용자 ID (JWT에서 추출)
+     * @param userId  사용자 ID (JWT에서 추출)
      * @param request 계좌 PIN
      * @return 생성된 계좌 정보
      */
@@ -87,13 +90,13 @@ public class AccountService {
         LocalDate birthDate = parseBirth(session.getBirth());
 
         CreateUserAccountReqDto createReq = new CreateUserAccountReqDto(
-                session.getName(),           // nameKr
-                session.getNameEn(),         // nameEn
-                session.getEmail(),          // email
-                session.getPhone(),          // phoneNumber
-                birthDate,                   // birth
-                request.accountPin(),        // accountPin
-                session.getInitialBalance()  // initialBalance
+                session.getName(), // nameKr
+                session.getNameEn(), // nameEn
+                session.getEmail(), // email
+                session.getPhone(), // phoneNumber
+                birthDate, // birth
+                request.accountPin(), // accountPin
+                session.getInitialBalance() // initialBalance
         );
 
         // 5. 계좌 개설 (UserAccountService 호출)
@@ -106,6 +109,35 @@ public class AccountService {
                 userId, result.accountId(), result.accountNumber());
 
         return result;
+    }
+
+    /**
+     * 계좌 조회
+     *
+     * @param request 계좌 조회 요청 (id, code)
+     * @return 계좌 조회 결과 (이름, 계좌번호)
+     */
+    public AccountLookupResDto accountLookup(AccountLookupReqDto request) {
+        String id = request.id();
+        String code = request.code();
+
+        // 코드와 redis 내부 저장소에 저장된 코드를 비교하기
+        AuthSession session = redis.get(id);
+
+        // 시간만료 등의 이유로 데이터가 사라진 경우
+        if (session == null) {
+            throw new CommonException(ErrorCode.ENTITY_NOT_FOUND, "데이터를 찾을 수 없습니다.");
+        }
+        // 코드 검증이 실패할 경우
+        if (!code.equals(session.getCode())) {
+            throw new CommonException(ErrorCode.UNAUTHORIZED, "인증 코드 오류");
+        }
+
+        // 검증 성공 후 정보 삭제
+        redis.delete(id);
+
+        // 이름 & 계좌번호 return
+        return new AccountLookupResDto(session.getName(), session.getAccountNum());
     }
 
     /**
@@ -138,7 +170,7 @@ public class AccountService {
         try {
             // '-' 포함 여부로 형식 구분하여 DateTimeFormatter 선택
             DateTimeFormatter formatter = trimmedBirth.contains("-")
-                    ? DateTimeFormatter.ISO_LOCAL_DATE       // YYYY-MM-DD
+                    ? DateTimeFormatter.ISO_LOCAL_DATE // YYYY-MM-DD
                     : DateTimeFormatter.ofPattern("yyyyMMdd"); // YYYYMMDD
 
             return LocalDate.parse(trimmedBirth, formatter);
