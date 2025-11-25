@@ -47,6 +47,7 @@ public class TransferService {
 
         BankAccount from;
         BankAccount to;
+
         java.util.function.Supplier<CommonException> fromAccountNotFound =
                 () -> new CommonException(ErrorCode.ENTITY_NOT_FOUND, "보내는 계좌가 존재하지 않습니다.");
         java.util.function.Supplier<CommonException> toAccountNotFound =
@@ -102,11 +103,12 @@ public class TransferService {
         historyRepository.save(
                 BankTransactionHistory.builder()
                         .account(account)
-                        .amount(Math.toIntExact((long) amount))
+                        .amount(amount)
                         .counterpartyName(counterparty)
                         .displayName(displayName)
                         .description(description)
                         .build()
         );
+
     }
 }
