@@ -1,4 +1,4 @@
-package dev.woori.wooriBank.domain.auth.dto;
+package dev.woori.wooriBank.domain.auth.entity;
 
 import lombok.*;
 
@@ -16,5 +16,7 @@ public class AuthSession{
     private int failedAttempts; // 인증번호 실패 횟수
     private boolean verified; // 검증 여부
 
+    private String accountNum;
+    private String code; // 생성 완료 후 외부 서비스가 접근 가능하도록 해주는 코드(일회용)
     // 이후 필요한 필드 구현하면서 추가하기
 }
