@@ -1,13 +1,16 @@
 package dev.woori.wooriBank.domain.auth.controller;
 
+import dev.woori.wooriBank.config.exception.CommonException;
+import dev.woori.wooriBank.config.exception.ErrorCode;
 import dev.woori.wooriBank.config.response.ApiResponse;
 import dev.woori.wooriBank.config.response.BaseResponse;
 import dev.woori.wooriBank.config.response.SuccessCode;
 import dev.woori.wooriBank.domain.auth.dto.AuthReqDto;
 import dev.woori.wooriBank.domain.auth.dto.AuthVerifyReqDto;
 import dev.woori.wooriBank.domain.auth.dto.RefreshReqDto;
-import dev.woori.wooriBank.domain.auth.dto.TokenReqDto;
+import dev.woori.wooriBank.domain.auth.entity.BankClientApp;
 import dev.woori.wooriBank.domain.auth.service.AuthService;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -22,9 +25,24 @@ public class AuthController {
 
     private final AuthService authService;
 
+    /**
+     * JWT 토큰 발급
+     * AppKeySecretFilter에서 인증된 클라이언트 정보로 토큰 발급
+     *
+     * @param request HttpServletRequest (AppKeySecretFilter에서 clientApp attribute 설정)
+     * @return JWT access token + refresh token
+     */
     @PostMapping("/token")
-    public ResponseEntity<BaseResponse<?>> issueToken(@RequestBody TokenReqDto request){
-        return ApiResponse.success(SuccessCode.OK, authService.issueToken(request.userId()));
+    public ResponseEntity<BaseResponse<?>> issueToken(HttpServletRequest request) {
+        // AppKeySecretFilter에서 설정한 clientApp 가져오기
+        BankClientApp clientApp = (BankClientApp) request.getAttribute("clientApp");
+
+        if (clientApp == null) {
+            throw new CommonException(ErrorCode.UNAUTHORIZED, "인증된 클라이언트 정보를 찾을 수 없습니다.");
+        }
+
+        // 인증된 클라이언트의 이름으로 토큰 발급
+        return ApiResponse.success(SuccessCode.OK, authService.issueToken(clientApp.getName()));
     }
 
     @PostMapping("/refresh")

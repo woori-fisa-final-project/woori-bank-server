@@ -24,7 +24,7 @@ public class BankUser extends BaseEntity {
     @Column(name = "name_en", length = 50)
     private String nameEn;
 
-    @Column(nullable = false, length = 50)
+    @Column(nullable = false, length = 50, unique = true)
     private String email;
 
     @Column(name = "phone_number", nullable = false, length = 20)
@@ -33,6 +33,6 @@ public class BankUser extends BaseEntity {
     @Column(nullable = false)
     private LocalDate birth;
 
-    @Column(name = "auth_token", nullable = false)
+    @Column(name = "auth_token", nullable = false, unique = true)
     private String authToken;
 }
