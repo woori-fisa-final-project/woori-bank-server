@@ -30,20 +30,16 @@ public class AccountNumberGenerator {
      * @throws CommonException 계좌번호 생성 실패 시
      */
     public String generate() {
-        String accountNumber;
-        int attempts = 0;
-
-        do {
-            if (attempts++ >= MAX_ATTEMPTS) {
-                throw new CommonException(
-                        ErrorCode.INTERNAL_SERVER_ERROR,
-                        "계좌번호 생성에 실패했습니다. 잠시 후 다시 시도해주세요."
-                );
-            }
+        for (int i = 0; i < MAX_ATTEMPTS; i++) {
             String random = String.format("%06d", ThreadLocalRandom.current().nextInt(1000000));
-            accountNumber = ACCOUNT_PREFIX + random;
-        } while (bankAccountRepository.existsByAccountNumber(accountNumber));
-
-        return accountNumber;
+            String accountNumber = ACCOUNT_PREFIX + random;
+            if (!bankAccountRepository.existsByAccountNumber(accountNumber)) {
+                return accountNumber;
+            }
+        }
+        throw new CommonException(
+                ErrorCode.INTERNAL_SERVER_ERROR,
+                "계좌번호 생성에 실패했습니다. 잠시 후 다시 시도해주세요."
+        );
     }
 }
