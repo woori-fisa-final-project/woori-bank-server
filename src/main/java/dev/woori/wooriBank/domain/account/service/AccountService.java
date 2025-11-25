@@ -27,13 +27,12 @@ public class AccountService {
             throw new CommonException(ErrorCode.ENTITY_NOT_FOUND, "데이터를 찾을 수 없습니다.");
         }
         // 코드 검증이 실패할 경우
-        if(!code.equals(session.getCode())){
+        if(session.getCode() == null || !session.getCode().equals(code)){
             throw new CommonException(ErrorCode.UNAUTHORIZED, "인증 코드 오류");
         }
 
-        // 검증 성공 후 내부 코드 초기화
-        session.setCode(null);
-        redis.save(id, session);
+        // 검증 성공 후 정보 삭제
+        redis.delete(id);
 
         // 이름 & 계좌번호 return
         return new AccountLookupResDto(session.getName(), session.getAccountNum());
