@@ -35,6 +35,8 @@ public class AccountService {
 
     private final AuthStoreRedis redis;
     private final UserAccountService userAccountService;
+    private static final DateTimeFormatter ISO_DATE_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE;
+    private static final DateTimeFormatter BASIC_DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMdd");
 
     /**
      * 1단계: 약관 동의 처리
@@ -170,8 +172,8 @@ public class AccountService {
         try {
             // '-' 포함 여부로 형식 구분하여 DateTimeFormatter 선택
             DateTimeFormatter formatter = trimmedBirth.contains("-")
-                    ? DateTimeFormatter.ISO_LOCAL_DATE // YYYY-MM-DD
-                    : DateTimeFormatter.ofPattern("yyyyMMdd"); // YYYYMMDD
+                    ? ISO_DATE_FORMATTER
+                    : BASIC_DATE_FORMATTER;
 
             return LocalDate.parse(trimmedBirth, formatter);
         } catch (DateTimeParseException e) {
