@@ -27,6 +27,13 @@ public class TransferService {
 
     private final BankAccountRepository bankAccountRepository;
     private final BankTransactionHistoryRepository historyRepository;
+
+    // 상수로 추출
+    private static final String DISPLAY_NAME_WITHDRAW = "포인트 출금";
+    private static final String DESCRIPTION_WITHDRAW = "포인트 현금화 출금";
+    private static final String DISPLAY_NAME_DEPOSIT = "포인트 입금";
+    private static final String DESCRIPTION_DEPOSIT = "포인트 현금화 입금";
+
     /**
      * 포인트 현금화 이체 기능
      * fromAccount → toAccount 로 금액 이동
@@ -71,15 +78,16 @@ public class TransferService {
                 from,
                 -amount,
                 to.getUser().getNameKr(),
-                "포인트 출금",
-                "포인트 현금화 출금"
+                DISPLAY_NAME_WITHDRAW,
+                DESCRIPTION_WITHDRAW
+
         ); // 관리자 계좌 → 출금 내역
         createHistory(
                 to,
                 amount,
                 from.getUser().getNameKr(),
-                "포인트 입금",
-                "포인트 현금화 입금"
+                DISPLAY_NAME_DEPOSIT,
+                DESCRIPTION_DEPOSIT
         );// 사용자 계좌 → 입금 내역
 
         // 4. 응답 반환
