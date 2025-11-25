@@ -35,11 +35,18 @@ public class AuthController {
     @PostMapping("/token")
     public ResponseEntity<BaseResponse<?>> issueToken(HttpServletRequest request) {
         // AppKeySecretFilter에서 설정한 clientApp 가져오기
-        BankClientApp clientApp = (BankClientApp) request.getAttribute("clientApp");
+        Object clientAppObj = request.getAttribute("clientApp");
 
-        if (clientApp == null) {
+        if (clientAppObj == null) {
             throw new CommonException(ErrorCode.UNAUTHORIZED, "인증된 클라이언트 정보를 찾을 수 없습니다.");
         }
+
+        // 타입 안전성 확인
+        if (!(clientAppObj instanceof BankClientApp)) {
+            throw new CommonException(ErrorCode.UNAUTHORIZED, "올바르지 않은 클라이언트 정보 형식입니다.");
+        }
+
+        BankClientApp clientApp = (BankClientApp) clientAppObj;
 
         // 인증된 클라이언트의 이름으로 토큰 발급
         return ApiResponse.success(SuccessCode.OK, authService.issueToken(clientApp.getName()));
