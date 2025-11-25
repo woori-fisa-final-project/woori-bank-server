@@ -70,14 +70,14 @@ public class TransferService {
         createHistory(
                 from,
                 -amount,
-                "User:" + to.getAccountNumber(),
+                to.getUser().getNameKr(),
                 "포인트 출금",
                 "포인트 현금화 출금"
         ); // 관리자 계좌 → 출금 내역
         createHistory(
                 to,
                 amount,
-                "Admin:" + from.getAccountNumber(),
+                from.getUser().getNameKr(),
                 "포인트 입금",
                 "포인트 현금화 입금"
         );// 사용자 계좌 → 입금 내역
