@@ -37,7 +37,7 @@ public class BankAccount extends BaseEntity {
     /**
      * 입금 처리
      * @param amount 입금액 (BigDecimal)
-     * @throws CommonException amount가 null이거나 0 이하일 때
+     * @throws CommonException amount가 null이거나 0 미만일 때
      */
     public void deposit(BigDecimal amount) {
         validateAmount(amount, "입금액");
@@ -47,7 +47,7 @@ public class BankAccount extends BaseEntity {
     /**
      * 출금 처리
      * @param amount 출금액 (BigDecimal)
-     * @throws CommonException amount가 null이거나 0 이하일 때, 또는 잔액 부족 시
+     * @throws CommonException amount가 null이거나 0 미만일 때, 또는 잔액 부족 시
      */
     public void withdraw(BigDecimal amount) {
         validateAmount(amount, "출금액");
