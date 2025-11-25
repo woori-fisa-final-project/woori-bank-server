@@ -27,7 +27,7 @@ public class AccountService {
             throw new CommonException(ErrorCode.ENTITY_NOT_FOUND, "데이터를 찾을 수 없습니다.");
         }
         // 코드 검증이 실패할 경우
-        if(session.getCode() == null || !session.getCode().equals(code)){
+        if(!code.equals(session.getCode())){
             throw new CommonException(ErrorCode.UNAUTHORIZED, "인증 코드 오류");
         }
 
