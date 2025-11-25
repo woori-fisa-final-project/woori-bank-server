@@ -19,16 +19,6 @@ public class AccountService {
         String id = request.id();
         String code = request.code();
 
-        // 테스트용 - 세션에 id값을 토대로 저장
-        // TODO: 계좌개설 로직 연동 후 삭제
-        AuthSession saveSession = AuthSession.builder()
-                .id(id)
-                .name("aaa")
-                .code("1234")
-                .accountNum("123456789")
-                .build();
-        redis.save(id, saveSession);
-
         // 코드와 redis 내부 저장소에 저장된 코드를 비교하기
         AuthSession session = redis.get(id);
 
@@ -43,6 +33,7 @@ public class AccountService {
 
         // 검증 성공 후 내부 코드 초기화
         session.setCode(null);
+        redis.save(id, session);
 
         // 이름 & 계좌번호 return
         return new AccountLookupResDto(session.getName(), session.getAccountNum());
