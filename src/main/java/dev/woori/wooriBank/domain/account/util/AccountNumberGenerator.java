@@ -34,7 +34,7 @@ public class AccountNumberGenerator {
         int attempts = 0;
 
         do {
-            if (attempts++ > MAX_ATTEMPTS) {
+            if (attempts++ >= MAX_ATTEMPTS) {
                 throw new CommonException(
                         ErrorCode.INTERNAL_SERVER_ERROR,
                         "계좌번호 생성에 실패했습니다. 잠시 후 다시 시도해주세요."

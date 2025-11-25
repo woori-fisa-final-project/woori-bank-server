@@ -86,6 +86,14 @@ public class UserAccountService {
             );
         } catch (DataIntegrityViolationException e) {
             // 동시성 문제로 인한 중복 발생 시 (최종 안전장치)
+            // 어떤 제약 조건을 위반했는지 다시 확인하여 구체적인 메시지 제공
+            if (bankUserRepository.existsByAuthToken(externalUserId)) {
+                throw new CommonException(ErrorCode.CONFLICT, "이미 은행 계좌가 개설된 사용자입니다.");
+            }
+            if (bankUserRepository.existsByEmail(dto.email())) {
+                throw new CommonException(ErrorCode.CONFLICT, "이미 등록된 이메일입니다.");
+            }
+            // authToken, email이 아닌 다른 제약 조건 위반
             throw new CommonException(ErrorCode.CONFLICT, "중복된 데이터가 존재합니다.");
         }
     }
