@@ -152,9 +152,14 @@ public class AccountService {
      *
      * @param birth 생년월일 문자열 (YYYYMMDD 또는 YYYY-MM-DD)
      * @return LocalDate 객체
-     * @throws CommonException 생년월일 형식이 올바르지 않을 때
+     * @throws CommonException birth가 null이거나 빈 문자열일 때, 또는 형식이 올바르지 않을 때
      */
     private LocalDate parseBirth(String birth) {
+        // null 또는 빈 문자열 검증
+        if (birth == null || birth.trim().isEmpty()) {
+            throw new CommonException(ErrorCode.INVALID_REQUEST, "생년월일은 필수입니다.");
+        }
+
         try {
             if (birth.length() == 8) {
                 // YYYYMMDD 형식

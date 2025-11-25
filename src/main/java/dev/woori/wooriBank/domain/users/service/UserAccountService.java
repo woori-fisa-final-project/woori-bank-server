@@ -10,6 +10,7 @@ import dev.woori.wooriBank.domain.users.dto.CreateUserAccountReqDto;
 import dev.woori.wooriBank.domain.users.entity.BankUser;
 import dev.woori.wooriBank.domain.users.repository.BankUserRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -19,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
  * 회원 생성 및 계좌 개설 서비스
  * 메인 서버의 userId를 받아 은행 서버의 BankUser와 BankAccount를 생성
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class UserAccountService {
@@ -86,6 +88,9 @@ public class UserAccountService {
             );
         } catch (DataIntegrityViolationException e) {
             // 동시성 문제로 인한 중복 발생 시 (최종 안전장치)
+            log.error("DataIntegrityViolationException 발생 - externalUserId: {}, email: {}",
+                    externalUserId, dto.email(), e);
+
             // 어떤 제약 조건을 위반했는지 다시 확인하여 구체적인 메시지 제공
             if (bankUserRepository.existsByAuthToken(externalUserId)) {
                 throw new CommonException(ErrorCode.CONFLICT, "이미 은행 계좌가 개설된 사용자입니다.");
@@ -94,7 +99,8 @@ public class UserAccountService {
                 throw new CommonException(ErrorCode.CONFLICT, "이미 등록된 이메일입니다.");
             }
             // authToken, email이 아닌 다른 제약 조건 위반
-            throw new CommonException(ErrorCode.CONFLICT, "중복된 데이터가 존재합니다.");
+            throw new CommonException(ErrorCode.CONFLICT,
+                    "계좌 개설 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.");
         }
     }
 }

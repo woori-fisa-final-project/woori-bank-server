@@ -37,17 +37,24 @@ public class BankAccount extends BaseEntity {
     /**
      * 입금 처리
      * @param amount 입금액 (BigDecimal)
+     * @throws CommonException amount가 null이거나 0 이하일 때
      */
     public void deposit(BigDecimal amount) {
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new CommonException(ErrorCode.INVALID_REQUEST, "입금액은 0보다 커야 합니다.");
+        }
         this.balance = this.balance.add(amount);
     }
 
     /**
      * 출금 처리
      * @param amount 출금액 (BigDecimal)
-     * @throws CommonException 잔액 부족 시
+     * @throws CommonException amount가 null이거나 0 이하일 때, 또는 잔액 부족 시
      */
     public void withdraw(BigDecimal amount) {
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new CommonException(ErrorCode.INVALID_REQUEST, "출금액은 0보다 커야 합니다.");
+        }
         if (this.balance.compareTo(amount) < 0) {
             throw new CommonException(ErrorCode.INVALID_REQUEST, "잔액이 부족합니다.");
         }
