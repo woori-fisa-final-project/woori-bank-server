@@ -48,17 +48,16 @@ public class TransferService {
         BankAccount from;
         BankAccount to;
 
-        java.util.function.Supplier<CommonException> fromAccountNotFound =
-                () -> new CommonException(ErrorCode.ENTITY_NOT_FOUND, "보내는 계좌가 존재하지 않습니다.");
-        java.util.function.Supplier<CommonException> toAccountNotFound =
-                () -> new CommonException(ErrorCode.ENTITY_NOT_FOUND, "받는 계좌가 존재하지 않습니다.");
-
         if (fromAccountNumber.compareTo(toAccountNumber) < 0) {
-            from = bankAccountRepository.findAndLockByAccountNumber(fromAccountNumber).orElseThrow(fromAccountNotFound);
-            to = bankAccountRepository.findAndLockByAccountNumber(toAccountNumber).orElseThrow(toAccountNotFound);
+            from = bankAccountRepository.findAndLockByAccountNumber(fromAccountNumber)
+                    .orElseThrow(() -> new CommonException(ErrorCode.ENTITY_NOT_FOUND, "보내는 계좌가 존재하지 않습니다."));
+            to = bankAccountRepository.findAndLockByAccountNumber(toAccountNumber)
+                    .orElseThrow(() -> new CommonException(ErrorCode.ENTITY_NOT_FOUND, "받는 계좌가 존재하지 않습니다."));
         } else {
-            to = bankAccountRepository.findAndLockByAccountNumber(toAccountNumber).orElseThrow(toAccountNotFound);
-            from = bankAccountRepository.findAndLockByAccountNumber(fromAccountNumber).orElseThrow(fromAccountNotFound);
+            to = bankAccountRepository.findAndLockByAccountNumber(toAccountNumber)
+                    .orElseThrow(() -> new CommonException(ErrorCode.ENTITY_NOT_FOUND, "받는 계좌가 존재하지 않습니다."));
+            from = bankAccountRepository.findAndLockByAccountNumber(fromAccountNumber)
+                    .orElseThrow(() -> new CommonException(ErrorCode.ENTITY_NOT_FOUND, "보내는 계좌가 존재하지 않습니다."));
         }
 
         long amount = request.amount();
