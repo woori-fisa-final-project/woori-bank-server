@@ -64,8 +64,8 @@ public class BankAccount extends BaseEntity {
      * @throws CommonException amount가 null이거나 0 이하일 때
      */
     private void validateAmount(BigDecimal amount, String amountType) {
-        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new CommonException(ErrorCode.INVALID_REQUEST, amountType + "은 0보다 커야 합니다.");
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) < 0) {
+            throw new CommonException(ErrorCode.INVALID_REQUEST, amountType + "은 0 이상이어야 합니다.");
         }
     }
 }

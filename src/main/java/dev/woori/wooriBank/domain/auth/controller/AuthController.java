@@ -38,14 +38,13 @@ public class AuthController {
         Object clientAppObj = request.getAttribute("clientApp");
 
         // instanceof 패턴 매칭으로 타입 체크와 캐스팅을 동시에 처리
-        if (clientAppObj instanceof BankClientApp clientApp) {
-            // 인증된 클라이언트의 이름으로 토큰 발급
-            return ApiResponse.success(SuccessCode.OK, authService.issueToken(clientApp.getName()));
-        } else if (clientAppObj == null) {
+        if (!(clientAppObj instanceof BankClientApp clientApp)) {
+            // clientAppObj가 null이거나 BankClientApp 타입이 아닌 경우 모두 처리
             throw new CommonException(ErrorCode.UNAUTHORIZED, "인증된 클라이언트 정보를 찾을 수 없습니다.");
-        } else {
-            throw new CommonException(ErrorCode.UNAUTHORIZED, "올바르지 않은 클라이언트 정보 형식입니다.");
         }
+
+        // 인증된 클라이언트의 이름으로 토큰 발급
+        return ApiResponse.success(SuccessCode.OK, authService.issueToken(clientApp.getName()));
     }
 
     @PostMapping("/refresh")
