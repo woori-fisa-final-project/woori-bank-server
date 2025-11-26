@@ -3,10 +3,7 @@ package dev.woori.wooriBank.domain.auth.controller;
 import dev.woori.wooriBank.config.response.ApiResponse;
 import dev.woori.wooriBank.config.response.BaseResponse;
 import dev.woori.wooriBank.config.response.SuccessCode;
-import dev.woori.wooriBank.domain.auth.dto.AuthReqDto;
-import dev.woori.wooriBank.domain.auth.dto.AuthVerifyReqDto;
-import dev.woori.wooriBank.domain.auth.dto.RefreshReqDto;
-import dev.woori.wooriBank.domain.auth.dto.TokenReqDto;
+import dev.woori.wooriBank.domain.auth.dto.*;
 import dev.woori.wooriBank.domain.auth.service.AuthService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -43,6 +40,12 @@ public class AuthController {
     @PostMapping("/verify")
     public ResponseEntity<BaseResponse<?>> verify(@RequestBody AuthVerifyReqDto request){
         authService.verify(request);
+        return ApiResponse.success(SuccessCode.OK);
+    }
+
+    @PostMapping("/request/resend")
+    public ResponseEntity<BaseResponse<?>> resend(@RequestBody AuthCodeRefreshReqDto request){
+        authService.resendAuthCode(request);
         return ApiResponse.success(SuccessCode.OK);
     }
 }

@@ -9,6 +9,7 @@ import dev.woori.wooriBank.domain.account.dto.TidResDto;
 import dev.woori.wooriBank.domain.auth.entity.AuthSession;
 import dev.woori.wooriBank.domain.auth.entity.AuthStoreRedis;
 import dev.woori.wooriBank.domain.auth.repository.BankClientAppRepository;
+import dev.woori.wooriBank.domain.util.ValidationUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -20,6 +21,7 @@ public class AccountService {
 
     private final AuthStoreRedis redis;
     private final BankClientAppRepository bankClientAppRepository;
+    private final ValidationUtil validationUtil;
 
     public TidResDto getTid(TidReqDto tidReqDto) {
         // clientId 검증
@@ -41,21 +43,12 @@ public class AccountService {
     }
 
     public AccountLookupResDto accountLookup(AccountLookupReqDto request){
-        AuthSession session = getSessionOrThrow(request.tid());
+        AuthSession session = validationUtil.getSessionOrThrow(request.tid());
 
         // 검증 성공 후 정보 삭제
         redis.delete(request.tid());
 
         // 이름 & 계좌번호 return
         return new AccountLookupResDto(session.getName(), session.getAccountNum());
-    }
-
-    private AuthSession getSessionOrThrow(String userId) {
-        AuthSession session = redis.get(userId);
-        if (session == null) {
-            throw new CommonException(ErrorCode.ENTITY_NOT_FOUND,
-                    "세션이 만료되었습니다. 처음부터 다시 시작해주세요.");
-        }
-        return session;
     }
 }
