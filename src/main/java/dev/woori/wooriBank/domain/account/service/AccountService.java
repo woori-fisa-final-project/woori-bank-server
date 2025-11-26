@@ -33,6 +33,7 @@ public class AccountService {
         String tid = UUID.randomUUID().toString();
 
         AuthSession session = AuthSession.builder()
+                .tid(tid)
                 .clientId(tidReqDto.clientId())
                 .build();
 
@@ -44,6 +45,11 @@ public class AccountService {
 
     public AccountLookupResDto accountLookup(AccountLookupReqDto request){
         AuthSession session = validationUtil.getSessionOrThrow(request.tid());
+
+        // 인증 여부 확인
+        if (!session.isVerified()) {
+            throw new CommonException(ErrorCode.FORBIDDEN, "본인인증이 완료되지 않았습니다.");
+        }
 
         // 검증 성공 후 정보 삭제
         redis.delete(request.tid());

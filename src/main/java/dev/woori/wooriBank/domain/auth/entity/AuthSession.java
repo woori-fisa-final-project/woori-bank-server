@@ -8,6 +8,7 @@ import lombok.*;
 @NoArgsConstructor
 @AllArgsConstructor
 public class AuthSession{
+    private String tid;
     private String clientId;
 
     private String name; // 사용자 이름

@@ -89,14 +89,8 @@ public class AuthService {
         session.setBirth(request.birth());
         session.setPhone(request.phone());
         session.setAuthCode(authCode);
-        session.setFailedAttempts(0); // 실패 횟수 초기화
-        session.setVerified(false); // 인증 상태 초기화
-        redis.save(request.tid(), session);
 
-        // 인증번호를 보내준다 가정함
-
-        // 테스트용: 만들어진 코드를 콘솔에서 확인할 수 있도록 설정
-        log.info("authCode: {}", authCode);
+        issueNewAuthCode(session);
     }
 
     /**
@@ -128,6 +122,8 @@ public class AuthService {
 
         // 인증에 성공하면 verified 상태로 전환
         session.setVerified(true);
+        session.setAuthCode(null);
+        session.setFailedAttempts(0);
         redis.save(request.tid(), session);
     }
 
@@ -137,24 +133,10 @@ public class AuthService {
      */
     public void resendAuthCode(AuthCodeRefreshReqDto request){
         AuthSession session = validationUtil.getSessionOrThrow(request.tid());
-
-        // 재발급 시도가 너무 많을 경우
-        if(session.getResendAttempts() >= maxAttempts){
-            redis.delete(request.tid()); // 세션 삭제
-            throw new CommonException(ErrorCode.FORBIDDEN,
-                    "재발송 횟수를 초과했습니다. 처음부터 다시 시도해주세요.");
-        }
-
-        // 새로운 인증번호 발급
-        String newCode = String.format("%06d", random.nextInt(1000000));
-        session.setAuthCode(newCode);
-        session.setFailedAttempts(0);
-        session.setResendAttempts(session.getResendAttempts() + 1);
-
-        redis.save(request.tid(), session);
+        issueNewAuthCode(session);
     }
 
-    public TokenResDto generateAndSaveToken(String username, Role role){
+    private TokenResDto generateAndSaveToken(String username, Role role){
         // jwt 토큰 저장 로직
         String accessToken = jwtIssuer.generateAccessToken(username, role);
         var refreshTokenInfo = jwtIssuer.generateRefreshToken(username, role);
@@ -176,5 +158,27 @@ public class AuthService {
         refreshTokenRepository.save(token);
 
         return new TokenResDto(accessToken, refreshToken);
+    }
+
+    // 인증번호 발급용 메서드
+    private void issueNewAuthCode(AuthSession session){
+        // 재발급 시도가 너무 많을 경우
+        if(session.getResendAttempts() >= maxAttempts){
+            redis.delete(session.getTid()); // 세션 삭제
+            throw new CommonException(ErrorCode.FORBIDDEN,
+                    "재발송 횟수를 초과했습니다. 처음부터 다시 시도해주세요.");
+        }
+
+        // 새로운 인증번호 발급
+        String newCode = String.format("%06d", random.nextInt(1000000));
+        session.setAuthCode(newCode);
+
+        session.setFailedAttempts(0);
+        session.setVerified(false);
+        session.setResendAttempts(session.getResendAttempts() + 1);
+
+        // 테스트용: 만들어진 코드를 콘솔에서 확인할 수 있도록 설정
+        log.info("authCode: {}", newCode);
+        redis.save(session.getTid(), session);
     }
 }
