@@ -4,6 +4,7 @@ import dev.woori.wooriBank.config.response.ApiResponse;
 import dev.woori.wooriBank.config.response.BaseResponse;
 import dev.woori.wooriBank.config.response.SuccessCode;
 import dev.woori.wooriBank.domain.account.dto.AccountLookupReqDto;
+import dev.woori.wooriBank.domain.account.dto.TidReqDto;
 import dev.woori.wooriBank.domain.account.service.AccountService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +20,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class AccountController {
 
     private final AccountService accountService;
+
+    @PostMapping("/tid")
+    public ResponseEntity<BaseResponse<?>> getTid(@Valid @RequestBody TidReqDto request){
+        return ApiResponse.success(SuccessCode.OK, accountService.getTid(request));
+    }
 
     @PostMapping("/lookup")
     public ResponseEntity<BaseResponse<?>> accountLookup(@Valid @RequestBody AccountLookupReqDto request){

@@ -28,9 +28,8 @@ public class AppKeySecretFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
 
-        // 토큰 발급 요청인지 확인 - 아니면 다음 필터로 넘어감
         String path = request.getRequestURI();
-        if (!path.startsWith("/auth/token")) {
+        if (!path.startsWith("/account")) {
             filterChain.doFilter(request, response);
             return;
         }

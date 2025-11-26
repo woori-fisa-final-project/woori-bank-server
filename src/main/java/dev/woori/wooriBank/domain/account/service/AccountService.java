@@ -4,37 +4,58 @@ import dev.woori.wooriBank.config.exception.CommonException;
 import dev.woori.wooriBank.config.exception.ErrorCode;
 import dev.woori.wooriBank.domain.account.dto.AccountLookupReqDto;
 import dev.woori.wooriBank.domain.account.dto.AccountLookupResDto;
+import dev.woori.wooriBank.domain.account.dto.TidReqDto;
+import dev.woori.wooriBank.domain.account.dto.TidResDto;
 import dev.woori.wooriBank.domain.auth.entity.AuthSession;
 import dev.woori.wooriBank.domain.auth.entity.AuthStoreRedis;
+import dev.woori.wooriBank.domain.auth.repository.BankClientAppRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
 public class AccountService {
 
     private final AuthStoreRedis redis;
+    private final BankClientAppRepository bankClientAppRepository;
+
+    public TidResDto getTid(TidReqDto tidReqDto) {
+        // clientId 검증
+        if(!bankClientAppRepository.existsByClientId(tidReqDto.clientId())){
+            throw new CommonException(ErrorCode.FORBIDDEN);
+        }
+
+        // 랜덤 tid 생성 및 저장
+        String tid = UUID.randomUUID().toString();
+
+        AuthSession session = AuthSession.builder()
+                .clientId(tidReqDto.clientId())
+                .build();
+
+        // redis 저장
+        redis.save(tid, session);
+
+        return new TidResDto(tid);
+    }
 
     public AccountLookupResDto accountLookup(AccountLookupReqDto request){
-        String id = request.id();
-        String code = request.code();
-
-        // 코드와 redis 내부 저장소에 저장된 코드를 비교하기
-        AuthSession session = redis.get(id);
-
-        // 시간만료 등의 이유로 데이터가 사라진 경우
-        if(session == null){
-            throw new CommonException(ErrorCode.ENTITY_NOT_FOUND, "데이터를 찾을 수 없습니다.");
-        }
-        // 코드 검증이 실패할 경우
-        if(!code.equals(session.getCode())){
-            throw new CommonException(ErrorCode.UNAUTHORIZED, "인증 코드 오류");
-        }
+        AuthSession session = getSessionOrThrow(request.tid());
 
         // 검증 성공 후 정보 삭제
-        redis.delete(id);
+        redis.delete(request.tid());
 
         // 이름 & 계좌번호 return
         return new AccountLookupResDto(session.getName(), session.getAccountNum());
+    }
+
+    private AuthSession getSessionOrThrow(String userId) {
+        AuthSession session = redis.get(userId);
+        if (session == null) {
+            throw new CommonException(ErrorCode.ENTITY_NOT_FOUND,
+                    "세션이 만료되었습니다. 처음부터 다시 시작해주세요.");
+        }
+        return session;
     }
 }

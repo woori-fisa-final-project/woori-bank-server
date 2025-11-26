@@ -72,59 +72,53 @@ public class AuthService {
     }
 
     /**
-     * 사용자의 요청을 받아 개인정보를 임시로 저장하고 인증번호를 생성합니다.
-     * @param userId 사용자 id (혹은 redis 키값 / sessionId 같은 개념)
-     * @param request 사용자의 개인정보가 담긴 dto
+     * 사용자가 입력한 본인인증 정보를 저장하고, 인증번호를 생성합니다.
+     * @param request tid + 사용자가 입력한 개인정보(이름, 생일, 전화번호)
      */
-    public void request(String userId, AuthReqDto request){
+    public void request(AuthReqDto request){
+        // tid 검증
+        AuthSession session = getSessionOrThrow(request.tid());
+
         // 인증번호 생성 - 랜덤 6자리
         String authCode = String.format("%06d", random.nextInt(1000000));
 
-        // 사용자 정보 임시저장
-        AuthSession session = AuthSession.builder()
-                .id(userId)
-                .name(request.name())
-                .phone(request.phone())
-                .birth(request.birth())
-                .authCode(authCode)
-                .failedAttempts(0)
-                .verified(false)
-                .build();
+        // 세션에 임시저장
+        session.setName(request.name());
+        session.setBirth(request.birth());
+        session.setPhone(request.phone());
+        session.setAuthCode(authCode);
+        redis.save(request.tid(), session);
 
-        redis.save(userId, session);
+        // 인증번호를 보내준다 가정함
 
         // 테스트용: 만들어진 코드를 콘솔에서 확인할 수 있도록 설정
-        log.debug("authCode: {}", authCode);
+        log.info("authCode: {}", authCode);
     }
 
     /**
-     * 입력받은 인증번호가 올바른지 검증합니다.
-     * @param userId 사용자 id (혹은 redis 키값 / sessionId 같은 개념)
-     * @param request 사용자가 입력한 인증번호
+     * 사용자가 입력한 인증번호를 검증합니다.
+     * @param request tid + 입력한 인증번호
      */
-    public void verify(String userId, AuthVerifyReqDto request){
-        // 입력받은 인증번호와 저장된 인증번호 비교
-        AuthSession session = redis.get(userId);
-
-        // 시간만료 등의 이유로 데이터가 사라진 경우
-        if(session == null){
-            throw new CommonException(ErrorCode.ENTITY_NOT_FOUND, "데이터를 찾을 수 없습니다.");
-        }
+    public void verify(AuthVerifyReqDto request){
+        // tid 검증
+        AuthSession session = getSessionOrThrow(request.tid());
 
         if(!request.authCode().equals(session.getAuthCode())){
             // 일정 횟수 이상 실패했을 경우
             if(session.getFailedAttempts() >= maxAttempts){
-                redis.delete(userId); // 세션 삭제
+                session.setFailedAttempts(0);
+                redis.save(request.tid(), session);
+                // TODO: 실패한 이후 세션 삭제...?
                 throw new CommonException(ErrorCode.FORBIDDEN, "인증번호 검증에 실패했습니다. 인증번호를 다시 발급해 주세요.");
             }
             session.setFailedAttempts(session.getFailedAttempts() + 1);
-            redis.save(userId, session); // 실패 횟수 업데이트
+            redis.save(request.tid(), session); // 실패 횟수 업데이트
             throw new CommonException(ErrorCode.UNAUTHORIZED, "인증번호가 일치하지 않습니다.");
         }
 
         // 인증에 성공하면 verified 상태로 전환
         session.setVerified(true);
-        redis.save(userId, session);
+        redis.save(request.tid(), session);
     }
 
     public TokenResDto generateAndSaveToken(String username, Role role){
@@ -149,5 +143,14 @@ public class AuthService {
         refreshTokenRepository.save(token);
 
         return new TokenResDto(accessToken, refreshToken);
+    }
+
+    private AuthSession getSessionOrThrow(String tid) {
+        AuthSession session = redis.get(tid);
+        if (session == null) {
+            throw new CommonException(ErrorCode.ENTITY_NOT_FOUND,
+                    "세션이 만료되었습니다. 처음부터 다시 시작해주세요.");
+        }
+        return session;
     }
 }
