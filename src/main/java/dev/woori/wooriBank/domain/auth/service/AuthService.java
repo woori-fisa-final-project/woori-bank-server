@@ -130,6 +130,7 @@ public class AuthService {
      */
     public void resendAuthCode(AuthCodeRefreshReqDto request){
         AuthSession session = validationUtil.getSessionOrThrow(request.tid());
+        session.setResendAttempts(session.getResendAttempts() + 1);
         issueNewAuthCode(session);
     }
 
@@ -172,7 +173,6 @@ public class AuthService {
 
         session.setFailedAttempts(0);
         session.setVerified(false);
-        session.setResendAttempts(session.getResendAttempts() + 1);
 
         // 테스트용: 만들어진 코드를 콘솔에서 확인할 수 있도록 설정
         log.info("authCode: {}", newCode);

@@ -19,14 +19,9 @@ import java.util.UUID;
 public class AccountService {
 
     private final AuthStoreRedis redis;
-    private final BankClientAppRepository bankClientAppRepository;
     private final ValidationUtil validationUtil;
 
     public TidResDto getTid(String clientId) {
-        // clientId 검증
-        if(!bankClientAppRepository.existsByClientId(clientId)){
-            throw new CommonException(ErrorCode.FORBIDDEN);
-        }
 
         // 랜덤 tid 생성 및 저장
         String tid = UUID.randomUUID().toString();
