@@ -7,7 +7,6 @@ import dev.woori.wooriBank.domain.account.dto.AccountLookupResDto;
 import dev.woori.wooriBank.domain.account.dto.TidResDto;
 import dev.woori.wooriBank.domain.auth.entity.AuthSession;
 import dev.woori.wooriBank.domain.auth.entity.AuthStoreRedis;
-import dev.woori.wooriBank.domain.auth.repository.BankClientAppRepository;
 import dev.woori.wooriBank.domain.util.ValidationUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
