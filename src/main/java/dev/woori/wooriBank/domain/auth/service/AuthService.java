@@ -81,15 +81,12 @@ public class AuthService {
         // tid 검증
         AuthSession session = validationUtil.getSessionOrThrow(request.tid());
 
-        // 인증번호 생성 - 랜덤 6자리
-        String authCode = String.format("%06d", random.nextInt(1000000));
-
-        // 세션에 임시저장
+        // 세션에 개인정보 임시저장
         session.setName(request.name());
         session.setBirth(request.birth());
         session.setPhone(request.phone());
-        session.setAuthCode(authCode);
 
+        // 인증번호 발급
         issueNewAuthCode(session);
     }
 

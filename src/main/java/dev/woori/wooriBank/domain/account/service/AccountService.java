@@ -4,7 +4,6 @@ import dev.woori.wooriBank.config.exception.CommonException;
 import dev.woori.wooriBank.config.exception.ErrorCode;
 import dev.woori.wooriBank.domain.account.dto.AccountLookupReqDto;
 import dev.woori.wooriBank.domain.account.dto.AccountLookupResDto;
-import dev.woori.wooriBank.domain.account.dto.TidReqDto;
 import dev.woori.wooriBank.domain.account.dto.TidResDto;
 import dev.woori.wooriBank.domain.auth.entity.AuthSession;
 import dev.woori.wooriBank.domain.auth.entity.AuthStoreRedis;
@@ -23,9 +22,9 @@ public class AccountService {
     private final BankClientAppRepository bankClientAppRepository;
     private final ValidationUtil validationUtil;
 
-    public TidResDto getTid(TidReqDto tidReqDto) {
+    public TidResDto getTid(String clientId) {
         // clientId 검증
-        if(!bankClientAppRepository.existsByClientId(tidReqDto.clientId())){
+        if(!bankClientAppRepository.existsByClientId(clientId)){
             throw new CommonException(ErrorCode.FORBIDDEN);
         }
 
@@ -34,7 +33,7 @@ public class AccountService {
 
         AuthSession session = AuthSession.builder()
                 .tid(tid)
-                .clientId(tidReqDto.clientId())
+                .clientId(clientId)
                 .build();
 
         // redis 저장

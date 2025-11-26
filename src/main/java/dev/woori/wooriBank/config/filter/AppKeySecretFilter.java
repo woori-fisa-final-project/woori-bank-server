@@ -34,7 +34,6 @@ public class AppKeySecretFilter extends OncePerRequestFilter {
             return;
         }
 
-        // 토큰 발급 요청인 경우
         // 헤더에서 appKey와 secretKey값을 꺼내옴
         String appKey = request.getHeader("appKey");
         String secretKey = request.getHeader("secretKey");
@@ -67,7 +66,7 @@ public class AppKeySecretFilter extends OncePerRequestFilter {
         // TODO: payload secretKey로 검증하기
 
         // 검증이 끝나면 clientApp을 attribute로 설정
-        request.setAttribute("clientApp", clientApp);
+        request.setAttribute("clientApp", clientApp.getClientId());
 
         filterChain.doFilter(request, response);
     }
