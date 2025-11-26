@@ -24,8 +24,6 @@ import org.springframework.web.bind.annotation.*;
 public class TransferController {
 
     private final TransferService transferService;
-
-
     /**
      *      입금 실행
      *      POST /api/transfer
@@ -35,8 +33,6 @@ public class TransferController {
 
     @PostMapping("/transfer")
     public ResponseEntity<TransferResponseDto> transfer(@Valid @RequestBody TransferRequestDto request) {
-        //디버깅 및 추적용
-        log.info("[계좌이체 요청]: {}", request);
 
         TransferResponseDto response = transferService.transfer(request); // TransferService에 입금 처리 위임
         return ResponseEntity.ok(response); // 200 OK + 입금 결과 반환

@@ -34,6 +34,22 @@ public class TransferService {
     private static final String DISPLAY_NAME_DEPOSIT = "포인트 입금";
     private static final String DESCRIPTION_DEPOSIT = "포인트 현금화 입금";
 
+    // 마스킹 처리
+    private String maskAccount(String accountNumber) {
+        if (accountNumber == null || accountNumber.length() < 4) {
+            return "****";
+        }
+
+        int length = accountNumber.length();
+        return accountNumber.substring(0, 3)
+                + "****"
+                + accountNumber.substring(length - 2);
+    }
+
+    private BankAccount findAccountAndLock(String accountNumber, String errorMessage) {
+        return bankAccountRepository.findAndLockByAccountNumber(accountNumber)
+                .orElseThrow(() -> new CommonException(ErrorCode.ENTITY_NOT_FOUND, errorMessage));
+    }
     /**
      * 포인트 현금화 이체 기능
      * fromAccount → toAccount 로 금액 이동
@@ -45,26 +61,25 @@ public class TransferService {
             throw new CommonException(ErrorCode.INVALID_REQUEST, "보내는 계좌와 받는 계좌가 동일할 수 없습니다.");
         }
 
-        log.info("[계좌 이체] from={} to={} amount={}",
-                request.fromAccount(), request.toAccount(), request.amount());
+        log.info("[계좌 이체 요청] from={} to={} amount={}",
+                maskAccount(request.fromAccount()),
+                maskAccount(request.toAccount()),
+                request.amount());
 
         // 1. 데드락 방지: 계좌번호 오름차순 기준으로 락 획득 순서 고정
         String fromAccountNumber = request.fromAccount();
         String toAccountNumber = request.toAccount();
 
+
         BankAccount from;
         BankAccount to;
 
         if (fromAccountNumber.compareTo(toAccountNumber) < 0) {
-            from = bankAccountRepository.findAndLockByAccountNumber(fromAccountNumber)
-                    .orElseThrow(() -> new CommonException(ErrorCode.ENTITY_NOT_FOUND, "보내는 계좌가 존재하지 않습니다."));
-            to = bankAccountRepository.findAndLockByAccountNumber(toAccountNumber)
-                    .orElseThrow(() -> new CommonException(ErrorCode.ENTITY_NOT_FOUND, "받는 계좌가 존재하지 않습니다."));
+            from = findAccountAndLock(fromAccountNumber, "보내는 계좌가 존재하지 않습니다.");
+            to = findAccountAndLock(toAccountNumber, "받는 계좌가 존재하지 않습니다.");
         } else {
-            to = bankAccountRepository.findAndLockByAccountNumber(toAccountNumber)
-                    .orElseThrow(() -> new CommonException(ErrorCode.ENTITY_NOT_FOUND, "받는 계좌가 존재하지 않습니다."));
-            from = bankAccountRepository.findAndLockByAccountNumber(fromAccountNumber)
-                    .orElseThrow(() -> new CommonException(ErrorCode.ENTITY_NOT_FOUND, "보내는 계좌가 존재하지 않습니다."));
+            to = findAccountAndLock(toAccountNumber, "받는 계좌가 존재하지 않습니다.");
+            from = findAccountAndLock(fromAccountNumber, "보내는 계좌가 존재하지 않습니다.");
         }
 
         long amount = request.amount();
