@@ -8,10 +8,7 @@ import dev.woori.wooriBank.domain.account.service.AccountService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/account")
@@ -19,6 +16,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class AccountController {
 
     private final AccountService accountService;
+
+    @PostMapping("/tid")
+    public ResponseEntity<BaseResponse<?>> getTid(@RequestAttribute("clientApp") String clientId){
+        return ApiResponse.success(SuccessCode.OK, accountService.getTid(clientId));
+    }
 
     @PostMapping("/lookup")
     public ResponseEntity<BaseResponse<?>> accountLookup(@Valid @RequestBody AccountLookupReqDto request){

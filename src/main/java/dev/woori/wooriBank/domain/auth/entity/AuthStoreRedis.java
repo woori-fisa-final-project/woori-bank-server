@@ -23,7 +23,7 @@ public class AuthStoreRedis {
     // id에 매핑된 객체를 불러옴
     public AuthSession get(String sessionId) {
         Object obj = redisTemplate.opsForValue().get(sessionId);
-        return (obj instanceof AuthSession) ? (AuthSession) obj : null;
+        return (obj instanceof AuthSession session) ? session : null;
     }
 
     public void delete(String sessionId) {

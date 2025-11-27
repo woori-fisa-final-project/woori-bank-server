@@ -4,35 +4,48 @@ import dev.woori.wooriBank.config.exception.CommonException;
 import dev.woori.wooriBank.config.exception.ErrorCode;
 import dev.woori.wooriBank.domain.account.dto.AccountLookupReqDto;
 import dev.woori.wooriBank.domain.account.dto.AccountLookupResDto;
+import dev.woori.wooriBank.domain.account.dto.TidResDto;
 import dev.woori.wooriBank.domain.auth.entity.AuthSession;
 import dev.woori.wooriBank.domain.auth.entity.AuthStoreRedis;
+import dev.woori.wooriBank.domain.util.ValidationUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
 public class AccountService {
 
     private final AuthStoreRedis redis;
+    private final ValidationUtil validationUtil;
+
+    public TidResDto getTid(String clientId) {
+
+        // 랜덤 tid 생성 및 저장
+        String tid = UUID.randomUUID().toString();
+
+        AuthSession session = AuthSession.builder()
+                .tid(tid)
+                .clientId(clientId)
+                .build();
+
+        // redis 저장
+        redis.save(tid, session);
+
+        return new TidResDto(tid);
+    }
 
     public AccountLookupResDto accountLookup(AccountLookupReqDto request){
-        String id = request.id();
-        String code = request.code();
+        AuthSession session = validationUtil.getSessionOrThrow(request.tid());
 
-        // 코드와 redis 내부 저장소에 저장된 코드를 비교하기
-        AuthSession session = redis.get(id);
-
-        // 시간만료 등의 이유로 데이터가 사라진 경우
-        if(session == null){
-            throw new CommonException(ErrorCode.ENTITY_NOT_FOUND, "데이터를 찾을 수 없습니다.");
-        }
-        // 코드 검증이 실패할 경우
-        if(!code.equals(session.getCode())){
-            throw new CommonException(ErrorCode.UNAUTHORIZED, "인증 코드 오류");
+        // 인증 여부 확인
+        if (!session.isVerified()) {
+            throw new CommonException(ErrorCode.FORBIDDEN, "본인인증이 완료되지 않았습니다.");
         }
 
         // 검증 성공 후 정보 삭제
-        redis.delete(id);
+        redis.delete(request.tid());
 
         // 이름 & 계좌번호 return
         return new AccountLookupResDto(session.getName(), session.getAccountNum());

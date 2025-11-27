@@ -3,10 +3,7 @@ package dev.woori.wooriBank.domain.auth.controller;
 import dev.woori.wooriBank.config.response.ApiResponse;
 import dev.woori.wooriBank.config.response.BaseResponse;
 import dev.woori.wooriBank.config.response.SuccessCode;
-import dev.woori.wooriBank.domain.auth.dto.AuthReqDto;
-import dev.woori.wooriBank.domain.auth.dto.AuthVerifyReqDto;
-import dev.woori.wooriBank.domain.auth.dto.RefreshReqDto;
-import dev.woori.wooriBank.domain.auth.dto.TokenReqDto;
+import dev.woori.wooriBank.domain.auth.dto.*;
 import dev.woori.wooriBank.domain.auth.service.AuthService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -35,16 +32,20 @@ public class AuthController {
     // 본인인증 정보를 입력하면 인증번호를 발송해준다고 가정
     // 서버에서는 ok 응답만 보내줌
     @PostMapping("/request")
-    public ResponseEntity<BaseResponse<?>> request(@AuthenticationPrincipal String username,
-                                                   @RequestBody AuthReqDto authReqDto){
-        authService.request(username, authReqDto);
+    public ResponseEntity<BaseResponse<?>> request(@RequestBody AuthReqDto authReqDto){
+        authService.request(authReqDto);
         return ApiResponse.success(SuccessCode.OK);
     }
 
     @PostMapping("/verify")
-    public ResponseEntity<BaseResponse<?>> verify(@AuthenticationPrincipal String username,
-                                                  @RequestBody AuthVerifyReqDto request){
-        authService.verify(username, request);
+    public ResponseEntity<BaseResponse<?>> verify(@RequestBody AuthVerifyReqDto request){
+        authService.verify(request);
+        return ApiResponse.success(SuccessCode.OK);
+    }
+
+    @PostMapping("/request/resend")
+    public ResponseEntity<BaseResponse<?>> resend(@RequestBody AuthCodeRefreshReqDto request){
+        authService.resendAuthCode(request);
         return ApiResponse.success(SuccessCode.OK);
     }
 }

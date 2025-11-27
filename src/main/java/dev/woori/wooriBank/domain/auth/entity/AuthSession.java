@@ -8,12 +8,16 @@ import lombok.*;
 @NoArgsConstructor
 @AllArgsConstructor
 public class AuthSession{
-    private String id; // jwt 토큰값을 기반으로 한 id
+    private String tid;
+    private String clientId;
+
     private String name; // 사용자 이름
     private String phone; // 사용자 전화번호
     private String birth; // 사용자 생년월일
+
     private String authCode; // 인증번호
     private int failedAttempts; // 인증번호 실패 횟수
+    private int resendAttempts = 0; // 인증번호 재발송 횟수
     private boolean verified; // 검증 여부
 
     private String accountNum;
