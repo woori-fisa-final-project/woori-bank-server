@@ -30,13 +30,13 @@ public class BankAccount extends BaseEntity {
     private String password;
 
     @Column(nullable = false)
-    private Integer balance;
+    private long balance;
 
-    public void deposit(int amount) {
+    public void deposit(long amount) {
         this.balance += amount;
     }
 
-    public void withdraw(int amount) {
+    public void withdraw(long amount) {
         if(this.balance - amount < 0) {
             throw new CommonException(ErrorCode.INVALID_REQUEST, "잔액이 부족합니다.");
         }

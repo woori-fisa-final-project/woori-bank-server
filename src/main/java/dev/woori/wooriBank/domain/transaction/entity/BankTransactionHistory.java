@@ -36,7 +36,7 @@ public class BankTransactionHistory {
     private String displayName;
 
     @Column(nullable = false)
-    private Integer amount;
+    private Long amount;
 
     @Column(length = 50)
     private String description;
