@@ -33,6 +33,10 @@ public class BankUser extends BaseEntity {
     @Column(nullable = false)
     private LocalDate birth;
 
+    /**
+     * 계좌 개설 시 사용된 TID (추적 및 감사 목적)
+     * 주의: 인증용 토큰이 아님. 계정 생성 추적용 ID
+     */
     @Column(name = "auth_token", nullable = false)
-    private String authToken;
+    private String accountCreationTid;
 }

@@ -12,13 +12,13 @@ import dev.woori.wooriBank.domain.users.repository.BankUserRepository;
 import dev.woori.wooriBank.domain.util.ValidationUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.lang3.RandomStringUtils;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.security.SecureRandom;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
-import java.util.Random;
 import java.util.UUID;
 
 @Slf4j
@@ -30,6 +30,10 @@ public class AccountService {
     private final ValidationUtil validationUtil;
     private final BankUserRepository bankUserRepository;
     private final BankAccountRepository bankAccountRepository;
+    private final PasswordEncoder passwordEncoder;
+
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+    private static final String CODE_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 
     public TidResDto getTid(String clientId) {
 
@@ -123,12 +127,12 @@ public class AccountService {
         // 1. 세션 조회 및 검증
         AuthSession session = validateSessionForAccountCreation(request.tid());
 
-        try {
-            // 2. 전화번호 중복 체크
-            if (bankUserRepository.existsByPhoneNumber(session.getPhone())) {
-                throw new CommonException(ErrorCode.CONFLICT, "이미 가입된 전화번호입니다");
-            }
+        // 2. 전화번호 중복 체크
+        if (bankUserRepository.existsByPhoneNumber(session.getPhone())) {
+            throw new CommonException(ErrorCode.CONFLICT, "이미 가입된 전화번호입니다");
+        }
 
+        try {
             // 3. BankUser 생성
             BankUser user = createUser(session);
             log.info("[사용자 생성 완료] UserId: {}, Phone: {}", user.getId(), maskPhone(session.getPhone()));
@@ -154,7 +158,11 @@ public class AccountService {
 
             return new AccountCreateResDto(redirectUrl);
 
+        } catch (CommonException e) {
+            // CommonException은 그대로 전달 (의도된 예외)
+            throw e;
         } catch (Exception e) {
+            // 예상치 못한 예외만 INTERNAL_SERVER_ERROR로 변환
             log.error("[계좌 개설 실패] TID: {}, Error: {}", request.tid(), e.getMessage(), e);
             throw new CommonException(ErrorCode.INTERNAL_SERVER_ERROR, "계좌 개설 중 오류가 발생했습니다");
         }
@@ -193,7 +201,7 @@ public class AccountService {
                 .email(session.getEmail())
                 .phoneNumber(session.getPhone())
                 .birth(birthDate)
-                .authToken(session.getTid()) // TID를 authToken으로 사용
+                .accountCreationTid(session.getTid()) // 계좌 개설 추적용 TID 저장
                 .build();
 
         return bankUserRepository.save(user);
@@ -204,11 +212,12 @@ public class AccountService {
      */
     private BankAccount createBankAccount(BankUser user, String password) {
         String accountNumber = generateUniqueAccountNumber();
+        String hashedPassword = passwordEncoder.encode(password); // BCrypt 암호화
 
         BankAccount account = BankAccount.builder()
                 .user(user)
                 .accountNumber(accountNumber)
-                .password(password) // 4자리 평문 저장 (원격 코드 기준)
+                .password(hashedPassword)
                 .balance(0L)
                 .build();
 
@@ -217,6 +226,7 @@ public class AccountService {
 
     /**
      * 유니크한 계좌번호 생성 (1002-999-XXXXXX)
+     * SecureRandom을 사용하여 예측 불가능한 계좌번호 생성
      */
     private String generateUniqueAccountNumber() {
         String prefix = "1002-999-";
@@ -229,7 +239,7 @@ public class AccountService {
                 throw new CommonException(ErrorCode.INTERNAL_SERVER_ERROR,
                         "계좌번호 생성에 실패했습니다. 잠시 후 다시 시도해주세요.");
             }
-            String random = String.format("%06d", new Random().nextInt(1000000));
+            String random = String.format("%06d", SECURE_RANDOM.nextInt(1000000));
             accountNumber = prefix + random;
         } while (bankAccountRepository.findByAccountNumber(accountNumber).isPresent());
 
@@ -238,9 +248,14 @@ public class AccountService {
 
     /**
      * 랜덤 Code 생성 (16자리)
+     * SecureRandom을 사용하여 암호학적으로 안전한 코드 생성
      */
     private String generateCode() {
-        return RandomStringUtils.randomAlphanumeric(16);
+        StringBuilder code = new StringBuilder(16);
+        for (int i = 0; i < 16; i++) {
+            code.append(CODE_CHARS.charAt(SECURE_RANDOM.nextInt(CODE_CHARS.length())));
+        }
+        return code.toString();
     }
 
     /**

@@ -26,8 +26,8 @@ public class BankAccount extends BaseEntity {
     @Column(name = "account_number", nullable = false, unique = true, length = 20)
     private String accountNumber;
 
-    @Column(nullable = false, length = 4)
-    private String password;
+    @Column(nullable = false, length = 60)
+    private String password; // BCrypt 해시 저장 (60자)
 
     @Column(nullable = false)
     private long balance;
