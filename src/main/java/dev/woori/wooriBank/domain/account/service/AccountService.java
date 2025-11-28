@@ -12,6 +12,7 @@ import dev.woori.wooriBank.domain.users.repository.BankUserRepository;
 import dev.woori.wooriBank.domain.util.ValidationUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,8 +34,16 @@ public class AccountService {
     private final BankAccountRepository bankAccountRepository;
     private final PasswordEncoder passwordEncoder;
 
+    // 난수 생성 관련 상수
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     private static final String CODE_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    private static final int CODE_LENGTH = 16;
+
+    // 계좌번호 생성 관련 상수
+    private static final String ACCOUNT_NUMBER_PREFIX = "1002-999-";
+    private static final int ACCOUNT_NUMBER_RANDOM_DIGITS = 6;
+    private static final int ACCOUNT_NUMBER_MAX_VALUE = 1000000;
+    private static final int ACCOUNT_NUMBER_MAX_ATTEMPTS = 100;
 
     public TidResDto getTid(String clientId) {
 
@@ -167,6 +176,10 @@ public class AccountService {
         } catch (CommonException e) {
             // CommonException은 그대로 전달 (의도된 예외)
             throw e;
+        } catch (DataIntegrityViolationException e) {
+            // 동시성 이슈로 인한 중복 제약 위반 (Race Condition)
+            log.error("[계좌 개설 실패 - 중복] TID: {}, Error: {}", request.tid(), e.getMessage());
+            throw new CommonException(ErrorCode.CONFLICT, "이미 등록된 정보입니다. 다시 시도해주세요.");
         } catch (Exception e) {
             // 예상치 못한 예외만 INTERNAL_SERVER_ERROR로 변환
             log.error("[계좌 개설 실패] TID: {}, Error: {}", request.tid(), e.getMessage(), e);
@@ -235,18 +248,17 @@ public class AccountService {
      * SecureRandom을 사용하여 예측 불가능한 계좌번호 생성
      */
     private String generateUniqueAccountNumber() {
-        String prefix = "1002-999-";
         String accountNumber;
         int attempts = 0;
-        final int MAX_ATTEMPTS = 100;
 
         do {
-            if (attempts++ > MAX_ATTEMPTS) {
+            if (attempts++ > ACCOUNT_NUMBER_MAX_ATTEMPTS) {
                 throw new CommonException(ErrorCode.INTERNAL_SERVER_ERROR,
                         "계좌번호 생성에 실패했습니다. 잠시 후 다시 시도해주세요.");
             }
-            String random = String.format("%06d", SECURE_RANDOM.nextInt(1000000));
-            accountNumber = prefix + random;
+            String random = String.format("%0" + ACCOUNT_NUMBER_RANDOM_DIGITS + "d",
+                    SECURE_RANDOM.nextInt(ACCOUNT_NUMBER_MAX_VALUE));
+            accountNumber = ACCOUNT_NUMBER_PREFIX + random;
         } while (bankAccountRepository.findByAccountNumber(accountNumber).isPresent());
 
         return accountNumber;
@@ -257,8 +269,8 @@ public class AccountService {
      * SecureRandom을 사용하여 암호학적으로 안전한 코드 생성
      */
     private String generateCode() {
-        StringBuilder code = new StringBuilder(16);
-        for (int i = 0; i < 16; i++) {
+        StringBuilder code = new StringBuilder(CODE_LENGTH);
+        for (int i = 0; i < CODE_LENGTH; i++) {
             code.append(CODE_CHARS.charAt(SECURE_RANDOM.nextInt(CODE_CHARS.length())));
         }
         return code.toString();

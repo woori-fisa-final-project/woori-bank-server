@@ -11,7 +11,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
-import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -26,13 +25,13 @@ public class TermsService {
     private final AuthStoreRedis redis;
     private final ValidationUtil validationUtil;
 
-    private static final List<String> VALID_TERM_IDS = Arrays.asList(
+    private static final List<String> VALID_TERM_IDS = List.of(
             "PERSONAL_INFO",    // 개인정보 수집 및 이용 동의
             "SERVICE_TERMS",    // 서비스 이용약관 동의
             "MARKETING"         // 마케팅 정보 수신 동의 (선택)
     );
 
-    private static final List<String> REQUIRED_TERM_IDS = Arrays.asList(
+    private static final List<String> REQUIRED_TERM_IDS = List.of(
             "PERSONAL_INFO",
             "SERVICE_TERMS"
     );
@@ -72,7 +71,7 @@ public class TermsService {
         log.info("[약관 동의 완료] TID: {}, 필수약관: {}, 선택약관: {}",
                 request.tid(),
                 countAgreedTerms(request.terms(), REQUIRED_TERM_IDS),
-                countAgreedTerms(request.terms(), Arrays.asList("MARKETING")));
+                countAgreedTerms(request.terms(), List.of("MARKETING")));
 
         return new TermsSubmitResDto(true);
     }
