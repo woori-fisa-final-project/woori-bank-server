@@ -107,7 +107,7 @@ public class AccountService {
         }
 
         // 4. 계좌번호로 실제 계좌 조회
-        BankAccount account = bankAccountRepository.findByAccountNumber(session.getAccountNum())
+        BankAccount account = bankAccountRepository.findByAccountNumber(session.getAccountNumber())
                 .orElseThrow(() -> new CommonException(ErrorCode.ENTITY_NOT_FOUND, "계좌를 찾을 수 없습니다"));
 
         // 5. 일회용 Code 및 세션 삭제
@@ -159,7 +159,7 @@ public class AccountService {
             // 6. Code 생성 및 세션에 저장
             String code = generateCode();
             session.setCode(code);
-            session.setAccountNum(account.getAccountNumber());
+            session.setAccountNumber(account.getAccountNumber());
 
             // 7. Redis 저장 (세션 및 Code 매핑)
             redis.save(request.tid(), session);
@@ -298,13 +298,17 @@ public class AccountService {
     }
 
     /**
-     * Code 마스킹
+     * Code 마스킹 (길이 유지)
+     * 16자리 코드의 경우: Xy7a********g123 형태
      */
     private String maskCode(String code) {
         if (code == null || code.length() < 8) {
             return code;
         }
-        return code.substring(0, 4) + "****" + code.substring(12);
+        int visibleChars = 4; // 앞뒤로 보이는 글자 수
+        int maskedLength = code.length() - (visibleChars * 2);
+        String masked = "*".repeat(Math.max(0, maskedLength));
+        return code.substring(0, visibleChars) + masked + code.substring(code.length() - visibleChars);
     }
 
     /**

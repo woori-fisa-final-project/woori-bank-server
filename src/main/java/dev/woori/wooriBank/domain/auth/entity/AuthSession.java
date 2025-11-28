@@ -32,7 +32,7 @@ public class AuthSession{
     private String email; // 이메일
 
     // 계좌 정보
-    private String accountNum; // 계좌번호
+    private String accountNumber; // 계좌번호
     private String code; // 생성 완료 후 외부 서비스가 접근 가능하도록 해주는 코드(일회용)
 
     @Getter
