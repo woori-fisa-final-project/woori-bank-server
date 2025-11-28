@@ -15,6 +15,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.util.UriComponentsBuilder;
 
 import java.security.SecureRandom;
 import java.time.LocalDate;
@@ -85,7 +86,7 @@ public class AccountService {
         // 1. Code로 TID 조회
         String tid = redis.getTidByCode(request.code());
         if (tid == null) {
-            throw new CommonException(ErrorCode.NOT_FOUND, "유효하지 않은 Code입니다");
+            throw new CommonException(ErrorCode.ENTITY_NOT_FOUND, "유효하지 않은 Code입니다");
         }
 
         // 2. TID로 세션 조회
@@ -98,7 +99,7 @@ public class AccountService {
 
         // 4. 계좌번호로 실제 계좌 조회
         BankAccount account = bankAccountRepository.findByAccountNumber(session.getAccountNum())
-                .orElseThrow(() -> new CommonException(ErrorCode.NOT_FOUND, "계좌를 찾을 수 없습니다"));
+                .orElseThrow(() -> new CommonException(ErrorCode.ENTITY_NOT_FOUND, "계좌를 찾을 수 없습니다"));
 
         // 5. 일회용 Code 및 세션 삭제
         redis.deleteCode(request.code());
@@ -132,27 +133,32 @@ public class AccountService {
             throw new CommonException(ErrorCode.CONFLICT, "이미 가입된 전화번호입니다");
         }
 
+        // 3. 이메일 중복 체크
+        if (bankUserRepository.existsByEmail(session.getEmail())) {
+            throw new CommonException(ErrorCode.CONFLICT, "이미 가입된 이메일입니다");
+        }
+
         try {
-            // 3. BankUser 생성
+            // 4. BankUser 생성
             BankUser user = createUser(session);
             log.info("[사용자 생성 완료] UserId: {}, Phone: {}", user.getId(), maskPhone(session.getPhone()));
 
-            // 4. BankAccount 생성
+            // 5. BankAccount 생성
             BankAccount account = createBankAccount(user, request.password());
             log.info("[계좌 생성 완료] AccountNumber: {}, UserId: {}", account.getAccountNumber(), user.getId());
 
-            // 5. Code 생성 및 세션에 저장
+            // 6. Code 생성 및 세션에 저장
             String code = generateCode();
             session.setCode(code);
             session.setAccountNum(account.getAccountNumber());
 
-            // 6. Redis 저장 (세션 및 Code 매핑)
+            // 7. Redis 저장 (세션 및 Code 매핑)
             redis.save(request.tid(), session);
             redis.saveCode(code, request.tid(), 600); // 10분 TTL (600초)
 
             log.info("[Code 생성 완료] Code: {}, TID: {}", maskCode(code), request.tid());
 
-            // 7. Redirect URL 생성
+            // 8. Redirect URL 생성
             String redirectUrl = buildRedirectUrl(request.redirectUrl(), code);
             log.info("[계좌 개설 완료] TID: {}, AccountNumber: {}", request.tid(), account.getAccountNumber());
 
@@ -260,9 +266,13 @@ public class AccountService {
 
     /**
      * Redirect URL 생성
+     * UriComponentsBuilder를 사용하여 안전하게 URL 파라미터 추가
      */
     private String buildRedirectUrl(String baseUrl, String code) {
-        return baseUrl + (baseUrl.contains("?") ? "&" : "?") + "code=" + code;
+        return UriComponentsBuilder.fromUriString(baseUrl)
+                .queryParam("code", code)
+                .build()
+                .toUriString();
     }
 
     /**
