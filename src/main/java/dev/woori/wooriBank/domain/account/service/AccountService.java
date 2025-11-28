@@ -173,9 +173,6 @@ public class AccountService {
 
             return new AccountCreateResDto(redirectUrl);
 
-        } catch (CommonException e) {
-            // CommonException은 그대로 전달 (의도된 예외)
-            throw e;
         } catch (DataIntegrityViolationException e) {
             // 동시성 이슈로 인한 중복 제약 위반 (Race Condition)
             log.error("[계좌 개설 실패 - 중복] TID: {}, Error: {}", request.tid(), e.getMessage());
