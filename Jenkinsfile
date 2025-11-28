@@ -85,7 +85,7 @@ docker pull ${DOCKER_IMAGE}
 docker rm -f woori_bank_server || true
 
 # 새 컨테이너 실행
-docker run -d --name woori_bank_server -p 8081:8080 \
+docker run -d --name woori_bank_server -p 8081:8081 \
   -e SPRING_DATASOURCE_URL="${BANK_DB_URL}" \
   -e SPRING_DATASOURCE_USERNAME="${DB_USER}" \
   -e SPRING_DATASOURCE_PASSWORD="${DB_PASS}" \
