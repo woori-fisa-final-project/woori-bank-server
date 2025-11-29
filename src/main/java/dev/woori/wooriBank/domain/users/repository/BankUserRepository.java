@@ -10,6 +10,16 @@ import java.util.Optional;
 public interface BankUserRepository extends JpaRepository<BankUser, Long> {
 
     /**
+     * 전화번호로 사용자 조회
+     */
+    Optional<BankUser> findByPhoneNumber(String phoneNumber);
+
+    /**
+     * 전화번호 존재 여부 확인 (중복 가입 방지)
+     */
+    boolean existsByPhoneNumber(String phoneNumber);
+
+    /**
      * 이메일로 사용자 조회
      */
     Optional<BankUser> findByEmail(String email);
@@ -18,14 +28,4 @@ public interface BankUserRepository extends JpaRepository<BankUser, Long> {
      * 이메일 존재 여부 확인
      */
     boolean existsByEmail(String email);
-
-    /**
-     * 메인 서버 userId(authToken)로 사용자 조회
-     */
-    Optional<BankUser> findByAuthToken(String authToken);
-
-    /**
-     * 메인 서버 userId(authToken) 존재 여부 확인 (1인 1계좌 체크용)
-     */
-    boolean existsByAuthToken(String authToken);
 }

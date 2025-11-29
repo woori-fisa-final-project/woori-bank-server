@@ -2,183 +2,324 @@ package dev.woori.wooriBank.domain.account.service;
 
 import dev.woori.wooriBank.config.exception.CommonException;
 import dev.woori.wooriBank.config.exception.ErrorCode;
-import dev.woori.wooriBank.domain.account.dto.AccountLookupReqDto;
-import dev.woori.wooriBank.domain.account.dto.AccountLookupResDto;
-import dev.woori.wooriBank.domain.account.dto.request.AccountCreateReqDto;
-import dev.woori.wooriBank.domain.account.dto.request.AccountFormReqDto;
-import dev.woori.wooriBank.domain.account.dto.request.TermsSubmitReqDto;
-import dev.woori.wooriBank.domain.account.dto.response.UserAccountResDto;
+import dev.woori.wooriBank.domain.account.dto.*;
+import dev.woori.wooriBank.domain.account.entity.BankAccount;
+import dev.woori.wooriBank.domain.account.repository.BankAccountRepository;
 import dev.woori.wooriBank.domain.auth.entity.AuthSession;
 import dev.woori.wooriBank.domain.auth.entity.AuthStoreRedis;
-import dev.woori.wooriBank.domain.users.dto.CreateUserAccountReqDto;
-import dev.woori.wooriBank.domain.users.service.UserAccountService;
+import dev.woori.wooriBank.domain.users.entity.BankUser;
+import dev.woori.wooriBank.domain.users.repository.BankUserRepository;
+import dev.woori.wooriBank.domain.util.ValidationUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.util.UriComponentsBuilder;
 
+import java.security.SecureRandom;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeParseException;
+import java.util.UUID;
 
-/**
- * 계좌 개설 프로세스 서비스 (3단계)
- * 1. POST /api/terms/submit - 약관 동의
- * 2. POST /api/account/form - 추가 정보 입력
- * 3. POST /api/account/create - 계좌 개설
- * 4. POST /api/account/lookup - 계좌 조회
- * Redis 세션을 통해 단계별 정보를 저장하고 최종적으로 계좌를 개설
- */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class AccountService {
 
     private final AuthStoreRedis redis;
-    private final UserAccountService userAccountService;
-    private static final DateTimeFormatter ISO_DATE_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE;
-    private static final DateTimeFormatter BASIC_DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMdd");
+    private final ValidationUtil validationUtil;
+    private final BankUserRepository bankUserRepository;
+    private final BankAccountRepository bankAccountRepository;
+    private final PasswordEncoder passwordEncoder;
 
-    /**
-     * 1단계: 약관 동의 처리
-     *
-     * @param userId  사용자 ID (JWT에서 추출)
-     * @param request 약관 동의 정보
-     */
-    public void submitTerms(String userId, TermsSubmitReqDto request) {
-        AuthSession session = getSessionOrThrow(userId);
-        session.validateVerified();
+    // 난수 생성 관련 상수
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+    private static final String CODE_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    private static final int CODE_LENGTH = 16;
 
-        // 약관 동의 상태 업데이트
-        session.setTermsAgreed(request.termsAgreed());
-        redis.save(userId, session);
+    // 계좌번호 생성 관련 상수
+    private static final String ACCOUNT_NUMBER_PREFIX = "1002-999-";
+    private static final int ACCOUNT_NUMBER_RANDOM_DIGITS = 6;
+    private static final int ACCOUNT_NUMBER_MAX_VALUE = 1000000;
+    private static final int ACCOUNT_NUMBER_MAX_ATTEMPTS = 100;
 
-        log.debug("약관 동의 완료 - userId: {}", userId);
+    public TidResDto getTid(String clientId) {
+
+        // 랜덤 tid 생성 및 저장
+        String tid = UUID.randomUUID().toString();
+
+        AuthSession session = AuthSession.builder()
+                .tid(tid)
+                .clientId(clientId)
+                .build();
+
+        // redis 저장
+        redis.save(tid, session);
+
+        return new TidResDto(tid);
     }
 
     /**
-     * 2단계: 추가 정보 입력 처리
-     *
-     * @param userId  사용자 ID (JWT에서 추출)
-     * @param request 추가 정보 (이메일, 영문 이름, 초기 입금액)
+     * 추가 정보 입력 (소속 기관, 이메일)
      */
-    public void submitAccountForm(String userId, AccountFormReqDto request) {
-        AuthSession session = getSessionOrThrow(userId);
-        session.validateVerified();
-        session.validateTermsAgreed();
+    public AccountFormResDto saveAdditionalInfo(AccountFormReqDto request) {
+        // 1. TID 세션 조회
+        AuthSession session = validationUtil.getSessionOrThrow(request.tid());
 
-        // 추가 정보 업데이트
+        // 2. 약관 동의 완료 확인
+        if (!session.isTermsAgreed()) {
+            throw new CommonException(ErrorCode.FORBIDDEN, "약관 동의를 먼저 완료해주세요");
+        }
+
+        // 3. 세션에 추가 정보 저장
+        session.setOrgName(request.orgName());
         session.setEmail(request.email());
-        session.setNameEn(request.nameEn());
-        session.setInitialBalance(request.initialBalance());
-        redis.save(userId, session);
 
-        log.debug("추가 정보 입력 완료 - userId: {}, email: {}", userId, request.email());
+        // 4. Redis 저장
+        redis.save(request.tid(), session);
+
+        log.info("[추가 정보 저장 완료] TID: {}, 소속: {}, 이메일: {}",
+                request.tid(), request.orgName(), maskEmail(request.email()));
+
+        return new AccountFormResDto(true);
     }
 
     /**
-     * 3단계: 계좌 개설 (최종 단계)
-     *
-     * @param userId  사용자 ID (JWT에서 추출)
-     * @param request 계좌 PIN
-     * @return 생성된 계좌 정보
-     */
-    public UserAccountResDto createAccount(String userId, AccountCreateReqDto request) {
-        AuthSession session = getSessionOrThrow(userId);
-        session.validateVerified();
-        session.validateTermsAgreed();
-        session.validateAccountFormCompleted();
-
-        // 4. Redis 세션 정보를 CreateUserAccountReqDto로 변환
-        LocalDate birthDate = parseBirth(session.getBirth());
-
-        CreateUserAccountReqDto createReq = new CreateUserAccountReqDto(
-                session.getName(), // nameKr
-                session.getNameEn(), // nameEn
-                session.getEmail(), // email
-                session.getPhone(), // phoneNumber
-                birthDate, // birth
-                request.accountPin(), // accountPin
-                session.getInitialBalance() // initialBalance
-        );
-
-        // 5. 계좌 개설 (UserAccountService 호출)
-        UserAccountResDto result = userAccountService.createUserWithAccount(userId, createReq);
-
-        // 6. 계좌 개설 완료 후 Redis 세션 삭제
-        redis.delete(userId);
-
-        log.info("계좌 개설 완료 - userId: {}, accountId: {}, accountNumber: {}",
-                userId, result.accountId(), result.accountNumber());
-
-        return result;
-    }
-
-    /**
-     * 계좌 조회
-     *
-     * @param request 계좌 조회 요청 (id, code)
-     * @return 계좌 조회 결과 (이름, 계좌번호)
+     * Code 기반 계좌 조회 (일회용)
      */
     public AccountLookupResDto accountLookup(AccountLookupReqDto request) {
-        String id = request.id();
-        String code = request.code();
+        log.info("[계좌 조회 시작] Code: {}", maskCode(request.code()));
 
-        // 코드와 redis 내부 저장소에 저장된 코드를 비교하기
-        AuthSession session = redis.get(id);
-
-        // 시간만료 등의 이유로 데이터가 사라진 경우
-        if (session == null) {
-            throw new CommonException(ErrorCode.ENTITY_NOT_FOUND, "데이터를 찾을 수 없습니다.");
-        }
-        // 코드 검증이 실패할 경우
-        if (!code.equals(session.getCode())) {
-            throw new CommonException(ErrorCode.UNAUTHORIZED, "인증 코드 오류");
+        // 1. Code로 TID 조회
+        String tid = redis.getTidByCode(request.code());
+        if (tid == null) {
+            throw new CommonException(ErrorCode.ENTITY_NOT_FOUND, "유효하지 않은 Code입니다");
         }
 
-        // 검증 성공 후 정보 삭제
-        redis.delete(id);
+        // 2. TID로 세션 조회
+        AuthSession session = validationUtil.getSessionOrThrow(tid);
 
-        // 이름 & 계좌번호 return
-        return new AccountLookupResDto(session.getName(), session.getAccountNum());
+        // 3. Code 검증 (세션에 저장된 Code와 일치하는지)
+        if (!request.code().equals(session.getCode())) {
+            throw new CommonException(ErrorCode.FORBIDDEN, "Code가 일치하지 않습니다");
+        }
+
+        // 4. 계좌번호로 실제 계좌 조회
+        BankAccount account = bankAccountRepository.findByAccountNumber(session.getAccountNumber())
+                .orElseThrow(() -> new CommonException(ErrorCode.ENTITY_NOT_FOUND, "계좌를 찾을 수 없습니다"));
+
+        // 5. 일회용 Code 및 세션 삭제
+        redis.deleteCode(request.code());
+        redis.delete(tid);
+
+        log.info("[계좌 조회 완료] UserId: {}, AccountNumber: {}",
+                account.getUser().getId(), account.getAccountNumber());
+
+        // 6. 완전한 계좌 정보 반환 (포인트 연동을 위한 userId 포함)
+        return new AccountLookupResDto(
+                account.getUser().getId(),
+                session.getName(),
+                account.getAccountNumber(),
+                session.getEmail(),
+                session.getOrgName()
+        );
     }
 
     /**
-     * Redis에서 세션을 가져오고, 없으면 예외 발생
+     * 계좌 개설 (실제 DB 저장)
      */
-    private AuthSession getSessionOrThrow(String userId) {
-        AuthSession session = redis.get(userId);
-        if (session == null) {
-            throw new CommonException(ErrorCode.ENTITY_NOT_FOUND,
-                    "세션이 만료되었습니다. 처음부터 다시 시작해주세요.");
+    @Transactional
+    public AccountCreateResDto createAccount(AccountCreateReqDto request) {
+        log.info("[계좌 개설 시작] TID: {}", request.tid());
+
+        // 1. 세션 조회 및 검증
+        AuthSession session = validateSessionForAccountCreation(request.tid());
+
+        // 2. 전화번호 중복 체크
+        if (bankUserRepository.existsByPhoneNumber(session.getPhone())) {
+            throw new CommonException(ErrorCode.CONFLICT, "이미 가입된 전화번호입니다");
         }
+
+        // 3. 이메일 중복 체크
+        if (bankUserRepository.existsByEmail(session.getEmail())) {
+            throw new CommonException(ErrorCode.CONFLICT, "이미 가입된 이메일입니다");
+        }
+
+        try {
+            // 4. BankUser 생성
+            BankUser user = createUser(session);
+            log.info("[사용자 생성 완료] UserId: {}, Phone: {}", user.getId(), maskPhone(session.getPhone()));
+
+            // 5. BankAccount 생성
+            BankAccount account = createBankAccount(user, request.password());
+            log.info("[계좌 생성 완료] AccountNumber: {}, UserId: {}", account.getAccountNumber(), user.getId());
+
+            // 6. Code 생성 및 세션에 저장
+            String code = generateCode();
+            session.setCode(code);
+            session.setAccountNumber(account.getAccountNumber());
+
+            // 7. Redis 저장 (세션 및 Code 매핑)
+            redis.save(request.tid(), session);
+            redis.saveCode(code, request.tid(), 600); // 10분 TTL (600초)
+
+            log.info("[Code 생성 완료] Code: {}, TID: {}", maskCode(code), request.tid());
+
+            // 8. Redirect URL 생성
+            String redirectUrl = buildRedirectUrl(request.redirectUrl(), code);
+            log.info("[계좌 개설 완료] TID: {}, AccountNumber: {}", request.tid(), account.getAccountNumber());
+
+            return new AccountCreateResDto(redirectUrl);
+
+        } catch (DataIntegrityViolationException e) {
+            // 동시성 이슈로 인한 중복 제약 위반 (Race Condition)
+            log.error("[계좌 개설 실패 - 중복] TID: {}, Error: {}", request.tid(), e.getMessage());
+            throw new CommonException(ErrorCode.CONFLICT, "이미 등록된 정보입니다. 다시 시도해주세요.");
+        } catch (Exception e) {
+            // 예상치 못한 예외만 INTERNAL_SERVER_ERROR로 변환
+            log.error("[계좌 개설 실패] TID: {}, Error: {}", request.tid(), e.getMessage(), e);
+            throw new CommonException(ErrorCode.INTERNAL_SERVER_ERROR, "계좌 개설 중 오류가 발생했습니다");
+        }
+    }
+
+    /**
+     * 계좌 개설을 위한 세션 검증
+     */
+    private AuthSession validateSessionForAccountCreation(String tid) {
+        AuthSession session = validationUtil.getSessionOrThrow(tid);
+
+        if (!session.isVerified()) {
+            throw new CommonException(ErrorCode.FORBIDDEN, "본인인증을 먼저 완료해주세요");
+        }
+
+        if (!session.isTermsAgreed()) {
+            throw new CommonException(ErrorCode.FORBIDDEN, "약관 동의를 먼저 완료해주세요");
+        }
+
+        if (session.getOrgName() == null || session.getEmail() == null) {
+            throw new CommonException(ErrorCode.FORBIDDEN, "추가 정보 입력을 먼저 완료해주세요");
+        }
+
+        log.debug("[세션 검증 완료] TID: {}", tid);
         return session;
     }
 
     /**
-     * 생년월일 문자열(YYYYMMDD 또는 YYYY-MM-DD)을 LocalDate로 변환
-     *
-     * @param birth 생년월일 문자열 (YYYYMMDD 또는 YYYY-MM-DD)
-     * @return LocalDate 객체
-     * @throws CommonException birth가 null이거나 빈 문자열일 때, 또는 형식이 올바르지 않을 때
+     * BankUser 생성
      */
-    private LocalDate parseBirth(String birth) {
-        // null 또는 빈 문자열 검증 (Java 11+)
-        if (birth == null || birth.isBlank()) {
-            throw new CommonException(ErrorCode.INVALID_REQUEST, "생년월일은 필수입니다.");
+    private BankUser createUser(AuthSession session) {
+        LocalDate birthDate = LocalDate.parse(session.getBirth(), DateTimeFormatter.ofPattern("yyyyMMdd"));
+
+        BankUser user = BankUser.builder()
+                .nameKr(session.getName())
+                .email(session.getEmail())
+                .phoneNumber(session.getPhone())
+                .birth(birthDate)
+                .accountCreationTid(session.getTid()) // 계좌 개설 추적용 TID 저장
+                .build();
+
+        return bankUserRepository.save(user);
+    }
+
+    /**
+     * BankAccount 생성
+     */
+    private BankAccount createBankAccount(BankUser user, String password) {
+        String accountNumber = generateUniqueAccountNumber();
+        String hashedPassword = passwordEncoder.encode(password); // BCrypt 암호화
+
+        BankAccount account = BankAccount.builder()
+                .user(user)
+                .accountNumber(accountNumber)
+                .password(hashedPassword)
+                .balance(0L)
+                .build();
+
+        return bankAccountRepository.save(account);
+    }
+
+    /**
+     * 유니크한 계좌번호 생성 (1002-999-XXXXXX)
+     * SecureRandom을 사용하여 예측 불가능한 계좌번호 생성
+     */
+    private String generateUniqueAccountNumber() {
+        String accountNumber;
+        int attempts = 0;
+
+        do {
+            if (attempts++ > ACCOUNT_NUMBER_MAX_ATTEMPTS) {
+                throw new CommonException(ErrorCode.INTERNAL_SERVER_ERROR,
+                        "계좌번호 생성에 실패했습니다. 잠시 후 다시 시도해주세요.");
+            }
+            String random = String.format("%0" + ACCOUNT_NUMBER_RANDOM_DIGITS + "d",
+                    SECURE_RANDOM.nextInt(ACCOUNT_NUMBER_MAX_VALUE));
+            accountNumber = ACCOUNT_NUMBER_PREFIX + random;
+        } while (bankAccountRepository.findByAccountNumber(accountNumber).isPresent());
+
+        return accountNumber;
+    }
+
+    /**
+     * 랜덤 Code 생성 (16자리)
+     * SecureRandom을 사용하여 암호학적으로 안전한 코드 생성
+     */
+    private String generateCode() {
+        StringBuilder code = new StringBuilder(CODE_LENGTH);
+        for (int i = 0; i < CODE_LENGTH; i++) {
+            code.append(CODE_CHARS.charAt(SECURE_RANDOM.nextInt(CODE_CHARS.length())));
         }
+        return code.toString();
+    }
 
-        String trimmedBirth = birth.trim();
+    /**
+     * Redirect URL 생성
+     * UriComponentsBuilder를 사용하여 안전하게 URL 파라미터 추가
+     */
+    private String buildRedirectUrl(String baseUrl, String code) {
+        return UriComponentsBuilder.fromUriString(baseUrl)
+                .queryParam("code", code)
+                .build()
+                .toUriString();
+    }
 
-        try {
-            // '-' 포함 여부로 형식 구분하여 DateTimeFormatter 선택
-            DateTimeFormatter formatter = trimmedBirth.contains("-")
-                    ? ISO_DATE_FORMATTER
-                    : BASIC_DATE_FORMATTER;
-
-            return LocalDate.parse(trimmedBirth, formatter);
-        } catch (DateTimeParseException e) {
-            throw new CommonException(ErrorCode.INVALID_REQUEST,
-                    "생년월일 형식이 올바르지 않습니다. (지원 형식: YYYYMMDD 또는 YYYY-MM-DD)");
+    /**
+     * 전화번호 마스킹
+     */
+    private String maskPhone(String phone) {
+        if (phone == null || phone.length() != 11) {
+            return phone;
         }
+        return phone.substring(0, 3) + "****" + phone.substring(7);
+    }
+
+    /**
+     * Code 마스킹 (길이 유지)
+     * 16자리 코드의 경우: Xy7a********g123 형태
+     */
+    private String maskCode(String code) {
+        if (code == null || code.length() < 8) {
+            return code;
+        }
+        int visibleChars = 4; // 앞뒤로 보이는 글자 수
+        int maskedLength = code.length() - (visibleChars * 2);
+        String masked = "*".repeat(Math.max(0, maskedLength));
+        return code.substring(0, visibleChars) + masked + code.substring(code.length() - visibleChars);
+    }
+
+    /**
+     * 이메일 마스킹 (예: u***@example.com)
+     */
+    private String maskEmail(String email) {
+        if (email == null || !email.contains("@")) {
+            return email;
+        }
+        String[] parts = email.split("@");
+        String localPart = parts[0];
+        if (localPart.length() <= 1) {
+            return email;
+        }
+        return localPart.charAt(0) + "***@" + parts[1];
     }
 }

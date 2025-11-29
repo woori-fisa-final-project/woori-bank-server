@@ -23,10 +23,35 @@ public class AuthStoreRedis {
     // id에 매핑된 객체를 불러옴
     public AuthSession get(String sessionId) {
         Object obj = redisTemplate.opsForValue().get(sessionId);
-        return (obj instanceof AuthSession) ? (AuthSession) obj : null;
+        return (obj instanceof AuthSession session) ? session : null;
     }
 
     public void delete(String sessionId) {
         redisTemplate.delete(sessionId);
+    }
+
+    /**
+     * Code를 키로 TID 저장 (일회용 Code 매핑)
+     */
+    public void saveCode(String code, String tid, long ttl) {
+        String key = "code:" + code;
+        redisTemplate.opsForValue().set(key, tid, ttl, TimeUnit.SECONDS);
+    }
+
+    /**
+     * Code로 TID 조회
+     */
+    public String getTidByCode(String code) {
+        String key = "code:" + code;
+        Object obj = redisTemplate.opsForValue().get(key);
+        return (obj instanceof String tid) ? tid : null;
+    }
+
+    /**
+     * Code 삭제 (일회용 사용 후)
+     */
+    public void deleteCode(String code) {
+        String key = "code:" + code;
+        redisTemplate.delete(key);
     }
 }

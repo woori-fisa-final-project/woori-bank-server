@@ -24,7 +24,7 @@ public class BankUser extends BaseEntity {
     @Column(name = "name_en", length = 50)
     private String nameEn;
 
-    @Column(nullable = false, length = 50, unique = true)
+    @Column(nullable = false, length = 50)
     private String email;
 
     @Column(name = "phone_number", nullable = false, length = 20)
@@ -33,6 +33,10 @@ public class BankUser extends BaseEntity {
     @Column(nullable = false)
     private LocalDate birth;
 
-    @Column(name = "auth_token", nullable = false, unique = true)
-    private String authToken;
+    /**
+     * 계좌 개설 시 사용된 TID (추적 및 감사 목적)
+     * 주의: 인증용 토큰이 아님. 계정 생성 추적용 ID
+     */
+    @Column(name = "account_creation_tid", nullable = false)
+    private String accountCreationTid;
 }
