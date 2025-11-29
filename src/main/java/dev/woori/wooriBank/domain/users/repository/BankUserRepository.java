@@ -28,4 +28,14 @@ public interface BankUserRepository extends JpaRepository<BankUser, Long> {
      * 이메일 존재 여부 확인
      */
     boolean existsByEmail(String email);
+
+    /**
+     * TID로 사용자 조회
+     */
+    Optional<BankUser> findByAccountCreationTid(String tid);
+
+    /**
+     * TID 존재 여부 확인 (1인 1계좌 체크)
+     */
+    boolean existsByAccountCreationTid(String tid);
 }

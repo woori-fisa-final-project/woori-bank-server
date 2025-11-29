@@ -20,6 +20,7 @@ public class AuthSession{
 
     private String authCode; // 인증번호
     private int failedAttempts; // 인증번호 실패 횟수
+    @Builder.Default
     private int resendAttempts = 0; // 인증번호 재발송 횟수
     private boolean verified; // 검증 여부
 
