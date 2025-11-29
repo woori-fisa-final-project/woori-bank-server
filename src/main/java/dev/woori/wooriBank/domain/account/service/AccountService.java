@@ -171,8 +171,19 @@ public class AccountService {
 
         } catch (DataIntegrityViolationException e) {
             // 동시성 이슈로 인한 중복 제약 위반 (Race Condition)
-            log.error("[계좌 개설 실패 - 중복] TID: {}, Error: {}", request.tid(), e.getMessage());
-            throw new CommonException(ErrorCode.CONFLICT, "이미 등록된 정보입니다. 다시 시도해주세요.");
+            log.error("[계좌 개설 실패 - 중복] TID: {}, Phone: {}, Email: {}, Error: {}",
+                    request.tid(), maskPhone(session.getPhone()), maskEmail(session.getEmail()), e.getMessage());
+
+            // 어떤 제약 조건을 위반했는지 다시 확인하여 구체적인 메시지 제공
+            if (bankUserRepository.existsByPhoneNumber(session.getPhone())) {
+                throw new CommonException(ErrorCode.CONFLICT, "이미 가입된 전화번호입니다.");
+            }
+            if (bankUserRepository.existsByEmail(session.getEmail())) {
+                throw new CommonException(ErrorCode.CONFLICT, "이미 가입된 이메일입니다.");
+            }
+            // 전화번호, 이메일이 아닌 다른 제약 조건 위반 (예: accountNumber 중복 등)
+            throw new CommonException(ErrorCode.CONFLICT,
+                    "계좌 개설 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.");
         } catch (Exception e) {
             // 예상치 못한 예외만 INTERNAL_SERVER_ERROR로 변환
             log.error("[계좌 개설 실패] TID: {}, Error: {}", request.tid(), e.getMessage(), e);

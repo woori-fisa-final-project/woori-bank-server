@@ -134,7 +134,30 @@ public class AuthService {
         issueNewAuthCode(session);
     }
 
-    private TokenResDto generateAndSaveToken(String username, Role role){
+    /**
+     * 주민등록번호(RRN)를 세션에 저장합니다.
+     * 
+     * @param request tid + 주민등록번호
+     * @return 성공 여부
+     */
+    public RrnResDto saveRrn(RrnReqDto request) {
+        // 1. TID 검증
+        AuthSession session = validationUtil.getSessionOrThrow(request.tid());
+
+        // 2. 본인인증 완료 확인
+        if (!session.isVerified()) {
+            throw new CommonException(ErrorCode.FORBIDDEN, "본인인증을 먼저 완료해주세요");
+        }
+
+        // 3. 주민등록번호(RRN) 저장
+        session.setRrn(request.rrn());
+        redis.save(request.tid(), session);
+
+        log.info("[주민등록번호 저장] TID: {}", request.tid());
+        return new RrnResDto(true);
+    }
+
+    private TokenResDto generateAndSaveToken(String username, Role role) {
         // jwt 토큰 저장 로직
         String accessToken = jwtIssuer.generateAccessToken(username, role);
         var refreshTokenInfo = jwtIssuer.generateRefreshToken(username, role);
