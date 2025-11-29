@@ -164,8 +164,8 @@ public class AccountService {
 
         } catch (DataIntegrityViolationException e) {
             // 동시성 이슈로 인한 중복 제약 위반 (Race Condition)
-            log.error("[계좌 개설 실패 - 중복] TID: {}, Phone: {}, Email: {}, Error: {}",
-                    request.tid(), maskPhone(session.getPhone()), maskEmail(session.getEmail()), e.getMessage());
+            log.error("[계좌 개설 실패 - 중복] TID: {}, Phone: {}, Email: {}",
+                    request.tid(), maskPhone(session.getPhone()), maskEmail(session.getEmail()), e);
 
             // 어떤 제약 조건을 위반했는지 다시 확인하여 구체적인 메시지 제공
             try {

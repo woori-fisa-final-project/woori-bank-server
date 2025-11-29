@@ -12,6 +12,7 @@ import dev.woori.wooriBank.domain.auth.entity.RefreshToken;
 import dev.woori.wooriBank.domain.auth.jwt.JwtIssuer;
 import dev.woori.wooriBank.domain.auth.port.RefreshTokenPort;
 import dev.woori.wooriBank.domain.auth.entity.Role;
+import dev.woori.wooriBank.domain.util.EncryptionUtil;
 import dev.woori.wooriBank.domain.util.ValidationUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -34,6 +35,7 @@ public class AuthService {
     private final RefreshTokenPort refreshTokenRepository;
     private final AuthStoreRedis redis;
     private final ValidationUtil validationUtil;
+    private final EncryptionUtil encryptionUtil;
     private static final SecureRandom random = new SecureRandom();
     @Value("${auth.verification.max-attempts}")
     private int maxAttempts;
@@ -81,10 +83,10 @@ public class AuthService {
         // tid 검증
         AuthSession session = validationUtil.getSessionOrThrow(request.tid());
 
-        // 세션에 개인정보 임시저장
-        session.setName(request.name());
-        session.setBirth(request.birth());
-        session.setPhone(request.phone());
+        // 세션에 개인정보 임시저장 (암호화)
+        session.setName(encryptionUtil.encrypt(request.name()));
+        session.setBirth(encryptionUtil.encrypt(request.birth()));
+        session.setPhone(encryptionUtil.encrypt(request.phone()));
 
         // 인증번호 발급
         issueNewAuthCode(session);
@@ -149,8 +151,8 @@ public class AuthService {
             throw new CommonException(ErrorCode.FORBIDDEN, "본인인증을 먼저 완료해주세요");
         }
 
-        // 3. 주민등록번호(RRN) 저장
-        session.setRrn(request.rrn());
+        // 3. 주민등록번호(RRN) 저장 (암호화)
+        session.setRrn(encryptionUtil.encrypt(request.rrn()));
         redis.save(request.tid(), session);
 
         log.info("[주민등록번호 저장] TID: {}", request.tid());
