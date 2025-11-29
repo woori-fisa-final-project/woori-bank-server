@@ -4,6 +4,7 @@ import dev.woori.wooriBank.config.exception.CommonException;
 import dev.woori.wooriBank.config.exception.ErrorCode;
 import dev.woori.wooriBank.domain.account.repository.BankAccountRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.util.concurrent.ThreadLocalRandom;
@@ -12,6 +13,7 @@ import java.util.concurrent.ThreadLocalRandom;
  * 계좌번호 자동 생성 유틸리티
  * 중복되지 않는 유니크한 계좌번호를 생성합니다.
  */
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class AccountNumberGenerator {
@@ -36,10 +38,12 @@ public class AccountNumberGenerator {
             if (!bankAccountRepository.existsByAccountNumber(accountNumber)) {
                 return accountNumber;
             }
+            log.warn("[계좌번호 중복 발생] 재시도 {}/{}", i + 1, MAX_ATTEMPTS);
         }
+
+        log.error("[계좌번호 생성 실패] 최대 시도 횟수 초과");
         throw new CommonException(
                 ErrorCode.INTERNAL_SERVER_ERROR,
-                "계좌번호 생성에 실패했습니다. 잠시 후 다시 시도해주세요."
-        );
+                "계좌번호 생성에 실패했습니다. 잠시 후 다시 시도해주세요.");
     }
 }

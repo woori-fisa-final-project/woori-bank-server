@@ -9,6 +9,7 @@ import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.security.GeneralSecurityException;
 import java.security.SecureRandom;
 import java.util.Base64;
 
@@ -34,10 +35,9 @@ public class EncryptionUtil {
         // 키 길이 정확한 검증 (AES-256은 정확히 32바이트 필요)
         if (decodedKey.length != 32) {
             throw new IllegalArgumentException(
-                "암호화 키는 정확히 32바이트여야 합니다. " +
-                "AES-256 암호화를 위해 Base64 인코딩 시 44자 이상의 키가 필요합니다. " +
-                "현재: " + decodedKey.length + "바이트 (예상: 32바이트)"
-            );
+                    "암호화 키는 정확히 32바이트여야 합니다. " +
+                            "AES-256 암호화를 위해 Base64 인코딩 시 44자 이상의 키가 필요합니다. " +
+                            "현재: " + decodedKey.length + "바이트 (예상: 32바이트)");
         }
 
         this.secretKey = new SecretKeySpec(decodedKey, "AES");
@@ -46,6 +46,7 @@ public class EncryptionUtil {
 
     /**
      * 문자열 암호화
+     * 
      * @param plainText 암호화할 평문
      * @return Base64 인코딩된 암호문 (IV + 암호화된 데이터)
      */
@@ -75,7 +76,7 @@ public class EncryptionUtil {
             // Base64 인코딩하여 반환
             return Base64.getEncoder().encodeToString(byteBuffer.array());
 
-        } catch (Exception e) {
+        } catch (GeneralSecurityException e) {
             log.error("암호화 실패", e);
             throw new RuntimeException("암호화 중 오류가 발생했습니다.", e);
         }
@@ -83,6 +84,7 @@ public class EncryptionUtil {
 
     /**
      * 문자열 복호화
+     * 
      * @param encryptedText Base64 인코딩된 암호문
      * @return 복호화된 평문
      */
@@ -111,7 +113,7 @@ public class EncryptionUtil {
             byte[] decryptedData = cipher.doFinal(encryptedData);
             return new String(decryptedData, StandardCharsets.UTF_8);
 
-        } catch (Exception e) {
+        } catch (GeneralSecurityException e) {
             log.error("복호화 실패", e);
             throw new RuntimeException("복호화 중 오류가 발생했습니다.", e);
         }
