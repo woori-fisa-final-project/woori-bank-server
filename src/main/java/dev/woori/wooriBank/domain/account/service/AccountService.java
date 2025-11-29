@@ -126,8 +126,7 @@ public class AccountService {
                 session.getName(),
                 account.getAccountNumber(),
                 session.getEmail(),
-                session.getOrgName()
-        );
+                session.getOrgName());
     }
 
     /**
@@ -144,9 +143,10 @@ public class AccountService {
         // 2. 사용자 고유성 검증 (전화번호, 이메일 중복 체크)
         validateUserUniqueness(session);
 
-        // 3. Code 미리 생성 (중복 체크 포함)
-        String code = generateCode();
-        log.info("[Code 생성 완료] Code: {}, TID: {}", maskingUtil.maskCode(code), request.tid());
+        // 3. Code 생성 및 Redis에 원자적으로 선점 (SETNX)
+        // 동시성 문제 해결: 코드 생성 시점에 즉시 Redis에 저장
+        String code = generateCode(request.tid());
+        log.info("[Code 생성 및 선점 완료] Code: {}, TID: {}", maskingUtil.maskCode(code), request.tid());
 
         try {
             // 4. BankUser 생성
@@ -284,18 +284,23 @@ public class AccountService {
     }
 
     /**
-     * 랜덤 Code 생성 (16자리) with 중복 체크
+     * 랜덤 Code 생성 및 원자적 선점 (16자리)
      * SecureRandom을 사용하여 암호학적으로 안전한 코드 생성
-     * Redis에 이미 존재하는 코드는 재생성
+     * Redis SETNX를 사용하여 동시성 문제 해결
+     *
+     * @param tid Code와 매핑할 TID
+     * @return 생성되고 Redis에 선점된 Code
      */
-    private String generateCode() {
-        int maxRetries = 3;
+    private String generateCode(String tid) {
+        int maxRetries = 10; // SETNX 실패 시 재시도 횟수 증가
         for (int i = 0; i < maxRetries; i++) {
             String code = generateRandomCode();
 
-            // Redis에 이미 존재하는지 확인
-            if (redis.getTidByCode(code) == null) {
-                return code; // 중복 없음
+            // Redis에 원자적으로 저장 (SETNX)
+            // 존재하지 않는 경우에만 저장되므로 동시성 문제 해결
+            if (redis.setCodeIfAbsent(code, tid, 600L)) { // 10분 TTL
+                log.debug("[Code 생성 성공] Code: {}, TID: {}", maskingUtil.maskCode(code), tid);
+                return code; // 선점 성공
             }
             log.warn("[Code 중복 감지] 재생성 시도: {}/{}", i + 1, maxRetries);
         }
