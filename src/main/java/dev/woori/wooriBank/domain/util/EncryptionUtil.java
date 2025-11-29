@@ -31,17 +31,16 @@ public class EncryptionUtil {
         // 암호화 전용 키 사용 (JWT secret과 분리하여 보안 강화)
         byte[] decodedKey = Base64.getDecoder().decode(secret);
 
-        // 키 길이 검증 (AES-256은 최소 32바이트 필요)
-        if (decodedKey.length < 32) {
+        // 키 길이 정확한 검증 (AES-256은 정확히 32바이트 필요)
+        if (decodedKey.length != 32) {
             throw new IllegalArgumentException(
-                "암호화 키가 너무 짧습니다. AES-256 암호화를 위해 최소 32바이트(Base64 인코딩 시 44자) 필요합니다. " +
-                "현재: " + decodedKey.length + "바이트"
+                "암호화 키는 정확히 32바이트여야 합니다. " +
+                "AES-256 암호화를 위해 Base64 인코딩 시 44자 이상의 키가 필요합니다. " +
+                "현재: " + decodedKey.length + "바이트 (예상: 32바이트)"
             );
         }
 
-        byte[] key = new byte[32]; // AES-256은 32바이트 키 필요
-        System.arraycopy(decodedKey, 0, key, 0, 32);
-        this.secretKey = new SecretKeySpec(key, "AES");
+        this.secretKey = new SecretKeySpec(decodedKey, "AES");
         this.secureRandom = new SecureRandom();
     }
 
