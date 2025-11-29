@@ -133,15 +133,8 @@ public class AccountService {
         // 1. 세션 조회 및 검증
         AuthSession session = validateSessionForAccountCreation(request.tid());
 
-        // 2. 전화번호 중복 체크
-        if (bankUserRepository.existsByPhoneNumber(session.getPhone())) {
-            throw new CommonException(ErrorCode.CONFLICT, "이미 가입된 전화번호입니다");
-        }
-
-        // 3. 이메일 중복 체크
-        if (bankUserRepository.existsByEmail(session.getEmail())) {
-            throw new CommonException(ErrorCode.CONFLICT, "이미 가입된 이메일입니다");
-        }
+        // 2. 사용자 고유성 검증 (전화번호, 이메일 중복 체크)
+        validateUserUniqueness(session);
 
         try {
             // 4. BankUser 생성
@@ -175,11 +168,11 @@ public class AccountService {
                     request.tid(), maskPhone(session.getPhone()), maskEmail(session.getEmail()), e.getMessage());
 
             // 어떤 제약 조건을 위반했는지 다시 확인하여 구체적인 메시지 제공
-            if (bankUserRepository.existsByPhoneNumber(session.getPhone())) {
-                throw new CommonException(ErrorCode.CONFLICT, "이미 가입된 전화번호입니다.");
-            }
-            if (bankUserRepository.existsByEmail(session.getEmail())) {
-                throw new CommonException(ErrorCode.CONFLICT, "이미 가입된 이메일입니다.");
+            try {
+                validateUserUniqueness(session);
+            } catch (CommonException validationException) {
+                // 중복 검증에서 예외가 발생하면 해당 예외를 던짐
+                throw validationException;
             }
             // 전화번호, 이메일이 아닌 다른 제약 조건 위반 (예: accountNumber 중복 등)
             throw new CommonException(ErrorCode.CONFLICT,
@@ -188,6 +181,18 @@ public class AccountService {
             // 예상치 못한 예외만 INTERNAL_SERVER_ERROR로 변환
             log.error("[계좌 개설 실패] TID: {}, Error: {}", request.tid(), e.getMessage(), e);
             throw new CommonException(ErrorCode.INTERNAL_SERVER_ERROR, "계좌 개설 중 오류가 발생했습니다");
+        }
+    }
+
+    /**
+     * 사용자 고유성 검증 (전화번호, 이메일 중복 체크)
+     */
+    private void validateUserUniqueness(AuthSession session) {
+        if (bankUserRepository.existsByPhoneNumber(session.getPhone())) {
+            throw new CommonException(ErrorCode.CONFLICT, "이미 가입된 전화번호입니다.");
+        }
+        if (bankUserRepository.existsByEmail(session.getEmail())) {
+            throw new CommonException(ErrorCode.CONFLICT, "이미 가입된 이메일입니다.");
         }
     }
 

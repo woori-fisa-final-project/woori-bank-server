@@ -42,13 +42,7 @@ public class UserAccountService {
     public UserAccountResDto createUserWithAccount(String tid, CreateUserAccountReqDto dto) {
 
         // 1. 사전 검증 (명확성)
-        if (bankUserRepository.existsByAccountCreationTid(tid)) {
-            throw new CommonException(ErrorCode.CONFLICT, "이미 은행 계좌가 개설된 사용자입니다.");
-        }
-
-        if (bankUserRepository.existsByEmail(dto.email())) {
-            throw new CommonException(ErrorCode.CONFLICT, "이미 등록된 이메일입니다.");
-        }
+        validateUserUniqueness(tid, dto.email());
 
         try {
             // 2. BankUser 생성 (TID 저장)
@@ -92,15 +86,27 @@ public class UserAccountService {
                     tid, dto.email(), e);
 
             // 어떤 제약 조건을 위반했는지 다시 확인하여 구체적인 메시지 제공
-            if (bankUserRepository.existsByAccountCreationTid(tid)) {
-                throw new CommonException(ErrorCode.CONFLICT, "이미 은행 계좌가 개설된 사용자입니다.");
-            }
-            if (bankUserRepository.existsByEmail(dto.email())) {
-                throw new CommonException(ErrorCode.CONFLICT, "이미 등록된 이메일입니다.");
+            try {
+                validateUserUniqueness(tid, dto.email());
+            } catch (CommonException validationException) {
+                // 중복 검증에서 예외가 발생하면 해당 예외를 던짐
+                throw validationException;
             }
             // TID, email이 아닌 다른 제약 조건 위반
             throw new CommonException(ErrorCode.CONFLICT,
                     "계좌 개설 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.");
+        }
+    }
+
+    /**
+     * 사용자 고유성 검증 (TID, 이메일 중복 체크)
+     */
+    private void validateUserUniqueness(String tid, String email) {
+        if (bankUserRepository.existsByAccountCreationTid(tid)) {
+            throw new CommonException(ErrorCode.CONFLICT, "이미 은행 계좌가 개설된 사용자입니다.");
+        }
+        if (bankUserRepository.existsByEmail(email)) {
+            throw new CommonException(ErrorCode.CONFLICT, "이미 등록된 이메일입니다.");
         }
     }
 }
