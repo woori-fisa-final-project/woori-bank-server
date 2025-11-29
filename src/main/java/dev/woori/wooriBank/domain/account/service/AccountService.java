@@ -5,6 +5,7 @@ import dev.woori.wooriBank.config.exception.ErrorCode;
 import dev.woori.wooriBank.domain.account.dto.*;
 import dev.woori.wooriBank.domain.account.entity.BankAccount;
 import dev.woori.wooriBank.domain.account.repository.BankAccountRepository;
+import dev.woori.wooriBank.domain.account.util.AccountNumberGenerator;
 import dev.woori.wooriBank.domain.auth.entity.AuthSession;
 import dev.woori.wooriBank.domain.auth.entity.AuthStoreRedis;
 import dev.woori.wooriBank.domain.users.entity.BankUser;
@@ -33,17 +34,12 @@ public class AccountService {
     private final BankUserRepository bankUserRepository;
     private final BankAccountRepository bankAccountRepository;
     private final PasswordEncoder passwordEncoder;
+    private final AccountNumberGenerator accountNumberGenerator;
 
     // 난수 생성 관련 상수
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     private static final String CODE_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
     private static final int CODE_LENGTH = 16;
-
-    // 계좌번호 생성 관련 상수
-    private static final String ACCOUNT_NUMBER_PREFIX = "1002-999-";
-    private static final int ACCOUNT_NUMBER_RANDOM_DIGITS = 6;
-    private static final int ACCOUNT_NUMBER_MAX_VALUE = 1000000;
-    private static final int ACCOUNT_NUMBER_MAX_ATTEMPTS = 100;
 
     public TidResDto getTid(String clientId) {
 
@@ -227,7 +223,7 @@ public class AccountService {
      * BankAccount 생성
      */
     private BankAccount createBankAccount(BankUser user, String password) {
-        String accountNumber = generateUniqueAccountNumber();
+        String accountNumber = accountNumberGenerator.generate();
         String hashedPassword = passwordEncoder.encode(password); // BCrypt 암호화
 
         BankAccount account = BankAccount.builder()
@@ -238,27 +234,6 @@ public class AccountService {
                 .build();
 
         return bankAccountRepository.save(account);
-    }
-
-    /**
-     * 유니크한 계좌번호 생성 (1002-999-XXXXXX)
-     * SecureRandom을 사용하여 예측 불가능한 계좌번호 생성
-     */
-    private String generateUniqueAccountNumber() {
-        String accountNumber;
-        int attempts = 0;
-
-        do {
-            if (attempts++ > ACCOUNT_NUMBER_MAX_ATTEMPTS) {
-                throw new CommonException(ErrorCode.INTERNAL_SERVER_ERROR,
-                        "계좌번호 생성에 실패했습니다. 잠시 후 다시 시도해주세요.");
-            }
-            String random = String.format("%0" + ACCOUNT_NUMBER_RANDOM_DIGITS + "d",
-                    SECURE_RANDOM.nextInt(ACCOUNT_NUMBER_MAX_VALUE));
-            accountNumber = ACCOUNT_NUMBER_PREFIX + random;
-        } while (bankAccountRepository.findByAccountNumber(accountNumber).isPresent());
-
-        return accountNumber;
     }
 
     /**

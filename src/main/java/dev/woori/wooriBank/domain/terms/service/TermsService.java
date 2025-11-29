@@ -12,6 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -90,11 +91,18 @@ public class TermsService {
 
     /**
      * 필수 약관 동의 확인
+     * 동의한 약관 ID들을 Set으로 추출한 후, 필수 약관이 모두 포함되어 있는지 확인
      */
     private void validateRequiredTerms(List<TermsSubmitReqDto.TermAgreement> terms) {
+        // 동의한 약관 ID들을 Set으로 추출
+        Set<String> agreedTermIds = terms.stream()
+                .filter(term -> Boolean.TRUE.equals(term.agreed()))
+                .map(TermsSubmitReqDto.TermAgreement::termId)
+                .collect(Collectors.toSet());
+
+        // 필수 약관 중 동의하지 않은 항목 찾기
         List<String> missingTerms = REQUIRED_TERM_IDS.stream()
-                .filter(requiredTermId -> terms.stream()
-                        .noneMatch(term -> term.termId().equals(requiredTermId) && Boolean.TRUE.equals(term.agreed())))
+                .filter(requiredTermId -> !agreedTermIds.contains(requiredTermId))
                 .collect(Collectors.toList());
 
         if (!missingTerms.isEmpty()) {
