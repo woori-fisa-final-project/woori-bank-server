@@ -30,8 +30,17 @@ public class EncryptionUtil {
     public EncryptionUtil(@Value("${spring.jwt.secret}") String secret) {
         // JWT secret을 재사용 (Base64 디코딩 후 32바이트로 자름)
         byte[] decodedKey = Base64.getDecoder().decode(secret);
+
+        // 키 길이 검증 (AES-256은 최소 32바이트 필요)
+        if (decodedKey.length < 32) {
+            throw new IllegalArgumentException(
+                "JWT secret이 너무 짧습니다. AES-256 암호화를 위해 최소 32바이트(Base64 인코딩 시 44자) 필요합니다. " +
+                "현재: " + decodedKey.length + "바이트"
+            );
+        }
+
         byte[] key = new byte[32]; // AES-256은 32바이트 키 필요
-        System.arraycopy(decodedKey, 0, key, 0, Math.min(decodedKey.length, 32));
+        System.arraycopy(decodedKey, 0, key, 0, 32);
         this.secretKey = new SecretKeySpec(key, "AES");
         this.secureRandom = new SecureRandom();
     }

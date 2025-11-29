@@ -137,26 +137,26 @@ public class AccountService {
         validateUserUniqueness(session);
 
         try {
-            // 4. BankUser 생성
+            // 3. BankUser 생성
             BankUser user = createUser(session);
             log.info("[사용자 생성 완료] UserId: {}, Phone: {}", user.getId(), maskPhone(session.getPhone()));
 
-            // 5. BankAccount 생성
+            // 4. BankAccount 생성
             BankAccount account = createBankAccount(user, request.password());
             log.info("[계좌 생성 완료] AccountNumber: {}, UserId: {}", account.getAccountNumber(), user.getId());
 
-            // 6. Code 생성 및 세션에 저장
+            // 5. Code 생성 및 세션에 저장
             String code = generateCode();
             session.setCode(code);
             session.setAccountNumber(account.getAccountNumber());
 
-            // 7. Redis 저장 (세션 및 Code 매핑)
+            // 6. Redis 저장 (세션 및 Code 매핑)
             redis.save(request.tid(), session);
             redis.saveCode(code, request.tid(), 600); // 10분 TTL (600초)
 
             log.info("[Code 생성 완료] Code: {}, TID: {}", maskCode(code), request.tid());
 
-            // 8. Redirect URL 생성
+            // 7. Redirect URL 생성
             String redirectUrl = buildRedirectUrl(request.redirectUrl(), code);
             log.info("[계좌 개설 완료] TID: {}, AccountNumber: {}", request.tid(), account.getAccountNumber());
 
