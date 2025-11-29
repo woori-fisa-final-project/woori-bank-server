@@ -164,8 +164,12 @@ public class AccountService {
 
         } catch (DataIntegrityViolationException e) {
             // 동시성 이슈로 인한 중복 제약 위반 (Race Condition)
-            log.error("[계좌 개설 실패 - 중복] TID: {}, Phone: {}, Email: {}",
-                    request.tid(), maskPhone(session.getPhone()), maskEmail(session.getEmail()), e);
+            log.error("[계좌 개설 실패 - 중복] TID: {}, Phone: {}, Email: {}, Exception: {}",
+                    request.tid(),
+                    maskPhone(session.getPhone()),
+                    maskEmail(session.getEmail()),
+                    e.getMessage(),
+                    e);
 
             // 어떤 제약 조건을 위반했는지 다시 확인하여 구체적인 메시지 제공
             try {
@@ -253,10 +257,29 @@ public class AccountService {
     }
 
     /**
-     * 랜덤 Code 생성 (16자리)
+     * 랜덤 Code 생성 (16자리) with 중복 체크
      * SecureRandom을 사용하여 암호학적으로 안전한 코드 생성
+     * Redis에 이미 존재하는 코드는 재생성
      */
     private String generateCode() {
+        int maxRetries = 3;
+        for (int i = 0; i < maxRetries; i++) {
+            String code = generateRandomCode();
+
+            // Redis에 이미 존재하는지 확인
+            if (redis.getTidByCode(code) == null) {
+                return code; // 중복 없음
+            }
+            log.warn("[Code 중복 감지] 재생성 시도: {}/{}", i + 1, maxRetries);
+        }
+        throw new CommonException(ErrorCode.INTERNAL_SERVER_ERROR,
+                "Code 생성에 실패했습니다. 잠시 후 다시 시도해주세요.");
+    }
+
+    /**
+     * 랜덤 문자열 생성 (16자리)
+     */
+    private String generateRandomCode() {
         StringBuilder code = new StringBuilder(CODE_LENGTH);
         for (int i = 0; i < CODE_LENGTH; i++) {
             code.append(CODE_CHARS.charAt(SECURE_RANDOM.nextInt(CODE_CHARS.length())));

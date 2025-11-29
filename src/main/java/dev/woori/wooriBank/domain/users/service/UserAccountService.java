@@ -82,7 +82,11 @@ public class UserAccountService {
             );
         } catch (DataIntegrityViolationException e) {
             // 동시성 문제로 인한 중복 발생 시 (최종 안전장치)
-            log.error("DataIntegrityViolationException 발생 - tid: {}, email: {}", tid, dto.email(), e);
+            log.error("DataIntegrityViolationException 발생 - tid: {}, email: {}, Exception: {}",
+                    tid,
+                    dto.email(),
+                    e.getMessage(),
+                    e);
 
             // 어떤 제약 조건을 위반했는지 다시 확인하여 구체적인 메시지 제공
             try {
