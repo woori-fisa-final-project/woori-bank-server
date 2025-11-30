@@ -111,6 +111,8 @@ public class TransferService {
                 .toAccount(to.getAccountNumber())
                 .amount(amount)
                 .message("이체가 성공적으로 처리되었습니다.")
+                .success(true)     // 추가
+                .code(200)
                 .build();
     }
 

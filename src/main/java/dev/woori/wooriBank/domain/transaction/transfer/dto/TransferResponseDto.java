@@ -12,7 +12,9 @@ public record TransferResponseDto (
         String fromAccount, // 보내는 계좌 (관리자 계좌)
         String toAccount, // 받는 계좌 (사용자 계좌)
         Long amount, // 이체 금액
-        String message // 성공 메세지 또는 안내문구
+        String message, // 성공 메세지 또는 안내문구
+        int code,
+        boolean success
 ){
 
 }
