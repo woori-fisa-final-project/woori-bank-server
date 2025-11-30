@@ -10,6 +10,7 @@ import dev.woori.wooriBank.domain.transaction.transfer.repository.BankTransactio
 import dev.woori.wooriBank.domain.transaction.entity.BankTransactionHistory;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 /**
@@ -111,8 +112,8 @@ public class TransferService {
                 .toAccount(to.getAccountNumber())
                 .amount(amount)
                 .message("이체가 성공적으로 처리되었습니다.")
-                .success(true)     // 추가
-                .code(org.springframework.http.HttpStatus.OK.value())
+                .success(true)
+                .code(HttpStatus.OK.value())
                 .build();
     }
 
