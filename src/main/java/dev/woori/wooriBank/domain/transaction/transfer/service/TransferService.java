@@ -112,7 +112,7 @@ public class TransferService {
                 .amount(amount)
                 .message("이체가 성공적으로 처리되었습니다.")
                 .success(true)     // 추가
-                .code(200)
+                .code(org.springframework.http.HttpStatus.OK.value())
                 .build();
     }
 
