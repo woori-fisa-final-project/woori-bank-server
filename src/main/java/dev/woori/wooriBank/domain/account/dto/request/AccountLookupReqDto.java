@@ -1,4 +1,4 @@
-package dev.woori.wooriBank.domain.account.dto;
+package dev.woori.wooriBank.domain.account.dto.request;
 
 import jakarta.validation.constraints.NotBlank;
 

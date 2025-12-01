@@ -18,6 +18,9 @@ public class BankUser extends BaseEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(name = "registration_number", nullable = false, unique = true)
+    private String rrn;
+
     @Column(name = "name_kr", nullable = false, length = 30)
     private String nameKr;
 
@@ -32,11 +35,4 @@ public class BankUser extends BaseEntity {
 
     @Column(nullable = false)
     private LocalDate birth;
-
-    /**
-     * 계좌 개설 시 사용된 TID (추적 및 감사 목적)
-     * 주의: 인증용 토큰이 아님. 계정 생성 추적용 ID
-     */
-    @Column(name = "account_creation_tid", nullable = false)
-    private String accountCreationTid;
 }

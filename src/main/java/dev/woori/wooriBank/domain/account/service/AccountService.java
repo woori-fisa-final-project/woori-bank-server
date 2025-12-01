@@ -2,12 +2,19 @@ package dev.woori.wooriBank.domain.account.service;
 
 import dev.woori.wooriBank.config.exception.CommonException;
 import dev.woori.wooriBank.config.exception.ErrorCode;
-import dev.woori.wooriBank.domain.account.dto.*;
+import dev.woori.wooriBank.domain.account.dto.request.AccountCreateReqDto;
+import dev.woori.wooriBank.domain.account.dto.request.AccountFormReqDto;
+import dev.woori.wooriBank.domain.account.dto.request.AccountLookupReqDto;
+import dev.woori.wooriBank.domain.account.dto.response.AccountCreateResDto;
+import dev.woori.wooriBank.domain.account.dto.response.AccountFormResDto;
+import dev.woori.wooriBank.domain.account.dto.response.AccountLookupResDto;
+import dev.woori.wooriBank.domain.account.dto.response.TidResDto;
 import dev.woori.wooriBank.domain.account.entity.BankAccount;
 import dev.woori.wooriBank.domain.account.repository.BankAccountRepository;
 import dev.woori.wooriBank.domain.account.util.AccountNumberGenerator;
 import dev.woori.wooriBank.domain.auth.entity.AuthSession;
 import dev.woori.wooriBank.domain.auth.entity.AuthStoreRedis;
+import dev.woori.wooriBank.domain.auth.repository.BankClientAppRepository;
 import dev.woori.wooriBank.domain.users.entity.BankUser;
 import dev.woori.wooriBank.domain.users.repository.BankUserRepository;
 import dev.woori.wooriBank.domain.util.MaskingUtil;
@@ -36,6 +43,7 @@ public class AccountService {
     private final ValidationUtil validationUtil;
     private final MaskingUtil maskingUtil;
     private final BankUserRepository bankUserRepository;
+    private final BankClientAppRepository bankClientAppRepository;
     private final BankAccountRepository bankAccountRepository;
     private final PasswordEncoder passwordEncoder;
     private final AccountNumberGenerator accountNumberGenerator;
@@ -77,14 +85,14 @@ public class AccountService {
         }
 
         // 3. 세션에 추가 정보 저장
-        session.setOrgName(request.orgName());
+        session.setEngName(request.engName());
         session.setEmail(request.email());
 
         // 4. Redis 저장
         redis.save(request.tid(), session);
 
-        log.info("[추가 정보 저장 완료] TID: {}, 소속: {}, 이메일: {}",
-                request.tid(), request.orgName(), maskingUtil.maskEmail(request.email()));
+        log.info("[추가 정보 저장 완료] TID: {}, 영어 이름: {}, 이메일: {}",
+                request.tid(), request.engName(), maskingUtil.maskEmail(request.email()));
 
         return new AccountFormResDto(true);
     }
@@ -120,13 +128,11 @@ public class AccountService {
         log.info("[계좌 조회 완료] UserId: {}, AccountNumber: {}",
                 account.getUser().getId(), account.getAccountNumber());
 
-        // 6. 완전한 계좌 정보 반환 (포인트 연동을 위한 userId 포함)
+        // 6. 계좌 정보 반환
         return new AccountLookupResDto(
-                account.getUser().getId(),
                 session.getName(),
-                account.getAccountNumber(),
-                session.getEmail(),
-                session.getOrgName());
+                account.getAccountNumber()
+        );
     }
 
     /**
@@ -140,24 +146,21 @@ public class AccountService {
         // 1. 세션 조회 및 검증
         AuthSession session = validateSessionForAccountCreation(request.tid());
 
-        // 2. 사용자 고유성 검증 (전화번호, 이메일 중복 체크)
-        validateUserUniqueness(session);
-
-        // 3. Code 생성 및 Redis에 원자적으로 선점 (SETNX)
+        // 2. Code 생성 및 Redis에 원자적으로 선점 (SETNX)
         // 동시성 문제 해결: 코드 생성 시점에 즉시 Redis에 저장
         String code = generateCode(request.tid());
         log.info("[Code 생성 및 선점 완료] Code: {}, TID: {}", maskingUtil.maskCode(code), request.tid());
 
         try {
-            // 4. BankUser 생성
+            // 3. BankUser 생성
             BankUser user = createUser(session);
             log.info("[사용자 생성 완료] UserId: {}, Phone: {}", user.getId(), maskingUtil.maskPhone(session.getPhone()));
 
-            // 5. BankAccount 생성
+            // 4. BankAccount 생성
             BankAccount account = createBankAccount(user, request.password());
             log.info("[계좌 생성 완료] AccountNumber: {}, UserId: {}", account.getAccountNumber(), user.getId());
 
-            // 6. DB 트랜잭션 커밋 후 Redis 작업 수행
+            // 5. DB 트랜잭션 커밋 후 Redis 작업 수행
             String tid = request.tid();
             String accountNumber = account.getAccountNumber();
 
@@ -183,11 +186,12 @@ public class AccountService {
                 }
             });
 
-            // 7. Redirect URL 생성
-            String redirectUrl = buildRedirectUrl(request.redirectUrl(), code);
+            // 6. Redirect URL 생성
+            String redirectUrl = bankClientAppRepository.findByClientId(session.getClientId())
+                    .orElseThrow(() -> new CommonException(ErrorCode.ENTITY_NOT_FOUND)).getRedirectUrl();
             log.info("[계좌 개설 완료] TID: {}, AccountNumber: {}", request.tid(), account.getAccountNumber());
 
-            return new AccountCreateResDto(redirectUrl);
+            return new AccountCreateResDto(buildRedirectUrl(redirectUrl, code));
 
         } catch (DataIntegrityViolationException e) {
             // 동시성 이슈로 인한 중복 제약 위반 (Race Condition)
@@ -197,33 +201,12 @@ public class AccountService {
                     maskingUtil.maskEmail(session.getEmail()),
                     e.getMessage(),
                     e);
-
-            // 어떤 제약 조건을 위반했는지 다시 확인하여 구체적인 메시지 제공
-            try {
-                validateUserUniqueness(session);
-            } catch (CommonException validationException) {
-                // 중복 검증에서 예외가 발생하면 해당 예외를 던짐
-                throw validationException;
-            }
-            // 전화번호, 이메일이 아닌 다른 제약 조건 위반 (예: accountNumber 중복 등)
             throw new CommonException(ErrorCode.CONFLICT,
                     "계좌 개설 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.");
         } catch (Exception e) {
             // 예상치 못한 예외만 INTERNAL_SERVER_ERROR로 변환
             log.error("[계좌 개설 실패] TID: {}, Error: {}", request.tid(), e.getMessage(), e);
             throw new CommonException(ErrorCode.INTERNAL_SERVER_ERROR, "계좌 개설 중 오류가 발생했습니다");
-        }
-    }
-
-    /**
-     * 사용자 고유성 검증 (전화번호, 이메일 중복 체크)
-     */
-    private void validateUserUniqueness(AuthSession session) {
-        if (bankUserRepository.existsByPhoneNumber(session.getPhone())) {
-            throw new CommonException(ErrorCode.CONFLICT, "이미 가입된 전화번호입니다.");
-        }
-        if (bankUserRepository.existsByEmail(session.getEmail())) {
-            throw new CommonException(ErrorCode.CONFLICT, "이미 가입된 이메일입니다.");
         }
     }
 
@@ -241,7 +224,7 @@ public class AccountService {
             throw new CommonException(ErrorCode.FORBIDDEN, "약관 동의를 먼저 완료해주세요");
         }
 
-        if (session.getOrgName() == null || session.getEmail() == null) {
+        if (session.getEngName() == null || session.getEmail() == null) {
             throw new CommonException(ErrorCode.FORBIDDEN, "추가 정보 입력을 먼저 완료해주세요");
         }
 
@@ -253,16 +236,23 @@ public class AccountService {
      * BankUser 생성
      */
     private BankUser createUser(AuthSession session) {
-        LocalDate birthDate = LocalDate.parse(session.getBirth(), DateTimeFormatter.ofPattern(BIRTH_DATE_PATTERN));
+        // 우선 회원으로 등록되어 있는지 검증
+        BankUser registeredUser = bankUserRepository.findByRrn(session.getRrn()).orElse(null);
 
+        // 회원으로 등록되어 있으면 해당 정보 return
+        if (registeredUser != null) {
+            return registeredUser;
+        }
+
+        // 회원으로 등록되어 있지 않으면 회원가입 진행
+        LocalDate birthDate = LocalDate.parse(session.getBirth(), DateTimeFormatter.ofPattern(BIRTH_DATE_PATTERN));
         BankUser user = BankUser.builder()
                 .nameKr(session.getName())
+                .nameEn(session.getEngName())
                 .email(session.getEmail())
                 .phoneNumber(session.getPhone())
                 .birth(birthDate)
-                .accountCreationTid(session.getTid()) // 계좌 개설 추적용 TID 저장
                 .build();
-
         return bankUserRepository.save(user);
     }
 

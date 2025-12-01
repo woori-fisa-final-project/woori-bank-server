@@ -7,4 +7,6 @@ import java.util.Optional;
 
 public interface BankClientAppRepository extends JpaRepository<BankClientApp, Long> {
     Optional<BankClientApp> findByAppKey(String appKey);
+
+    Optional<BankClientApp> findByClientId(String clientId);
 }

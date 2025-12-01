@@ -30,7 +30,7 @@ public class AuthSession{
     private boolean termsAgreed; // 필수 약관 동의 완료 여부
 
     // 추가 정보
-    private String orgName; // 소속 기관
+    private String engName; // 영어 이름
     private String email; // 이메일
 
     // 계좌 정보
