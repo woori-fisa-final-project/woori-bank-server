@@ -36,12 +36,7 @@ public class TransferController {
 
     @PostMapping("/transfer")
     public ResponseEntity<BaseResponse<?>> transfer(@Valid @RequestBody TransferRequestDto request) {
+        return ApiResponse.success(SuccessCode.OK, transferService.transfer(request));
 
-        // 서비스에서 TransferResponseDto(Payload)만 받아온다
-        TransferResponseDto response = transferService.transfer(request);
-
-        // ApiResponse.success가 Wrapper(BaseResponse)를 만들어서 감싸준다.
-        return ApiResponse.success(SuccessCode.OK, response);
     }
-
 }
