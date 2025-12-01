@@ -17,6 +17,7 @@ import dev.woori.wooriBank.domain.auth.entity.AuthStoreRedis;
 import dev.woori.wooriBank.domain.auth.repository.BankClientAppRepository;
 import dev.woori.wooriBank.domain.users.entity.BankUser;
 import dev.woori.wooriBank.domain.users.repository.BankUserRepository;
+import dev.woori.wooriBank.domain.util.EncryptionUtil;
 import dev.woori.wooriBank.domain.util.MaskingUtil;
 import dev.woori.wooriBank.domain.util.ValidationUtil;
 import lombok.RequiredArgsConstructor;
@@ -42,6 +43,7 @@ public class AccountService {
     private final AuthStoreRedis redis;
     private final ValidationUtil validationUtil;
     private final MaskingUtil maskingUtil;
+    private final EncryptionUtil encryptionUtil;
     private final BankUserRepository bankUserRepository;
     private final BankClientAppRepository bankClientAppRepository;
     private final BankAccountRepository bankAccountRepository;
@@ -128,9 +130,10 @@ public class AccountService {
         log.info("[계좌 조회 완료] UserId: {}, AccountNumber: {}",
                 account.getUser().getId(), account.getAccountNumber());
 
-        // 6. 계좌 정보 반환
+        // 6. 계좌 정보 반환 (암호화된 이름 복호화)
+        String decryptedName = encryptionUtil.decrypt(session.getName());
         return new AccountLookupResDto(
-                session.getName(),
+                decryptedName,
                 account.getAccountNumber()
         );
     }
@@ -154,7 +157,7 @@ public class AccountService {
         try {
             // 3. BankUser 생성
             BankUser user = createUser(session);
-            log.info("[사용자 생성 완료] UserId: {}, Phone: {}", user.getId(), maskingUtil.maskPhone(session.getPhone()));
+            log.info("[사용자 생성 완료] UserId: {}, Phone: {}", user.getId(), maskingUtil.maskPhone(user.getPhoneNumber()));
 
             // 4. BankAccount 생성
             BankAccount account = createBankAccount(user, request.password());
@@ -249,8 +252,14 @@ public class AccountService {
      * BankUser 생성
      */
     private BankUser createUser(AuthSession session) {
-        // 우선 회원으로 등록되어 있는지 검증
-        BankUser registeredUser = bankUserRepository.findByRrn(session.getRrn()).orElse(null);
+        // Redis에서 가져온 암호화된 데이터를 복호화
+        String decryptedRrn = encryptionUtil.decrypt(session.getRrn());
+        String decryptedName = encryptionUtil.decrypt(session.getName());
+        String decryptedPhone = encryptionUtil.decrypt(session.getPhone());
+        String decryptedBirth = encryptionUtil.decrypt(session.getBirth());
+
+        // 우선 회원으로 등록되어 있는지 검증 (복호화된 RRN으로 검색)
+        BankUser registeredUser = bankUserRepository.findByRrn(decryptedRrn).orElse(null);
 
         // 회원으로 등록되어 있으면 해당 정보 return
         if (registeredUser != null) {
@@ -258,12 +267,13 @@ public class AccountService {
         }
 
         // 회원으로 등록되어 있지 않으면 회원가입 진행
-        LocalDate birthDate = LocalDate.parse(session.getBirth(), DateTimeFormatter.ofPattern(BIRTH_DATE_PATTERN));
+        LocalDate birthDate = LocalDate.parse(decryptedBirth, DateTimeFormatter.ofPattern(BIRTH_DATE_PATTERN));
         BankUser user = BankUser.builder()
-                .nameKr(session.getName())
+                .rrn(decryptedRrn)
+                .nameKr(decryptedName)
                 .nameEn(session.getEngName())
                 .email(session.getEmail())
-                .phoneNumber(session.getPhone())
+                .phoneNumber(decryptedPhone)
                 .birth(birthDate)
                 .build();
         return bankUserRepository.save(user);
