@@ -1,5 +1,8 @@
 package dev.woori.wooriBank.domain.transaction.transfer.controller;
 
+import dev.woori.wooriBank.config.response.ApiResponse;
+import dev.woori.wooriBank.config.response.BaseResponse;
+import dev.woori.wooriBank.config.response.SuccessCode;
 import dev.woori.wooriBank.domain.transaction.transfer.dto.TransferRequestDto;
 import dev.woori.wooriBank.domain.transaction.transfer.dto.TransferResponseDto;
 import dev.woori.wooriBank.domain.transaction.transfer.service.TransferService;
@@ -32,9 +35,8 @@ public class TransferController {
      */
 
     @PostMapping("/transfer")
-    public ResponseEntity<TransferResponseDto> transfer(@Valid @RequestBody TransferRequestDto request) {
+    public ResponseEntity<BaseResponse<?>> transfer(@Valid @RequestBody TransferRequestDto request) {
+        return ApiResponse.success(SuccessCode.OK, transferService.transfer(request));
 
-        TransferResponseDto response = transferService.transfer(request); // TransferService에 입금 처리 위임
-        return ResponseEntity.ok(response); // 200 OK + 입금 결과 반환
     }
 }

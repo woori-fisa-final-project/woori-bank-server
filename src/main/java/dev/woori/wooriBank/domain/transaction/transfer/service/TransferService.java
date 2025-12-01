@@ -110,7 +110,6 @@ public class TransferService {
                 .fromAccount(from.getAccountNumber())
                 .toAccount(to.getAccountNumber())
                 .amount(amount)
-                .message("이체가 성공적으로 처리되었습니다.")
                 .build();
     }
 
