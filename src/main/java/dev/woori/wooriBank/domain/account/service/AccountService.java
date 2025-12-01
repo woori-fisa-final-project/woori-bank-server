@@ -168,20 +168,33 @@ public class AccountService {
                 @Override
                 public void afterCommit() {
                     try {
-                        // 세션에 Code 및 계좌번호 저장
+                        // 세션에 Code 및 계좌번호 저장 (Code는 이미 Redis에 저장됨)
                         session.setCode(code);
                         session.setAccountNumber(accountNumber);
 
-                        // Redis 저장 (세션 및 Code 매핑)
+                        // 세션 업데이트
                         redis.save(tid, session);
-                        redis.saveCode(code, tid, 600); // 10분 TTL (600초)
 
-                        log.info("[Redis 저장 완료] TID: {}, Code: {}", tid, maskingUtil.maskCode(code));
+                        log.info("[세션 업데이트 완료] TID: {}, Code: {}", tid, maskingUtil.maskCode(code));
                     } catch (Exception e) {
-                        // Redis 저장 실패 시 에러 로깅 (DB는 이미 커밋됨)
-                        log.error("[Redis 저장 실패] TID: {}, Code: {}, AccountNumber: {}",
+                        // 세션 저장 실패 시 에러 로깅 (DB는 이미 커밋됨, Code는 Redis에 존재)
+                        log.error("[세션 저장 실패] TID: {}, Code: {}, AccountNumber: {}",
                                 tid, maskingUtil.maskCode(code), accountNumber, e);
                         // TODO: 보상 트랜잭션 또는 수동 복구 필요
+                    }
+                }
+
+                @Override
+                public void afterCompletion(int status) {
+                    // 트랜잭션이 롤백된 경우 (STATUS_ROLLED_BACK)
+                    if (status == STATUS_ROLLED_BACK) {
+                        try {
+                            // Redis에 저장된 Code 삭제
+                            redis.deleteCode(code);
+                            log.info("[트랜잭션 롤백 - Code 삭제] TID: {}, Code: {}", tid, maskingUtil.maskCode(code));
+                        } catch (Exception e) {
+                            log.error("[Code 삭제 실패] TID: {}, Code: {}", tid, maskingUtil.maskCode(code), e);
+                        }
                     }
                 }
             });

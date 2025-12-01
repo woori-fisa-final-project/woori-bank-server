@@ -107,8 +107,8 @@ public class AuthService {
 
         // 인증에 실패했을 경우
         if(!request.authCode().equals(session.getAuthCode())){
-            // 일정 횟수 이상 실패했을 경우
-            if(session.getFailedAttempts() >= maxAttempts){
+            // 일정 횟수 이상 실패했을 경우 (이번 시도 포함)
+            if(session.getFailedAttempts() >= maxAttempts - 1){
                 session.setAuthCode(null);
                 session.setFailedAttempts(0);
                 redis.save(request.tid(), session);
