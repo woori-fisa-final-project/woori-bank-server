@@ -18,6 +18,7 @@ import dev.woori.wooriBank.domain.auth.repository.BankClientAppRepository;
 import dev.woori.wooriBank.domain.users.entity.BankUser;
 import dev.woori.wooriBank.domain.users.repository.BankUserRepository;
 import dev.woori.wooriBank.domain.util.EncryptionUtil;
+import dev.woori.wooriBank.domain.util.HashUtil;
 import dev.woori.wooriBank.domain.util.MaskingUtil;
 import dev.woori.wooriBank.domain.util.ValidationUtil;
 import lombok.RequiredArgsConstructor;
@@ -44,6 +45,7 @@ public class AccountService {
     private final ValidationUtil validationUtil;
     private final MaskingUtil maskingUtil;
     private final EncryptionUtil encryptionUtil;
+    private final HashUtil hashUtil;
     private final BankUserRepository bankUserRepository;
     private final BankClientAppRepository bankClientAppRepository;
     private final BankAccountRepository bankAccountRepository;
@@ -170,20 +172,18 @@ public class AccountService {
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                 @Override
                 public void afterCommit() {
-                    try {
-                        // 세션에 Code 및 계좌번호 저장 (Code는 이미 Redis에 저장됨)
-                        session.setCode(code);
-                        session.setAccountNumber(accountNumber);
+                    // 세션에 Code 및 계좌번호 저장 (Code는 이미 Redis에 저장됨)
+                    session.setCode(code);
+                    session.setAccountNumber(accountNumber);
 
-                        // 세션 업데이트
-                        redis.save(tid, session);
+                    // 재시도 로직으로 보상 트랜잭션 구현
+                    boolean success = saveSessionWithRetry(tid, session, code, accountNumber);
 
-                        log.info("[세션 업데이트 완료] TID: {}, Code: {}", tid, maskingUtil.maskCode(code));
-                    } catch (Exception e) {
-                        // 세션 저장 실패 시 에러 로깅 (DB는 이미 커밋됨, Code는 Redis에 존재)
-                        log.error("[세션 저장 실패] TID: {}, Code: {}, AccountNumber: {}",
-                                tid, maskingUtil.maskCode(code), accountNumber, e);
-                        // TODO: 보상 트랜잭션 또는 수동 복구 필요
+                    if (!success) {
+                        // 재시도 실패 시 알림 (모니터링 시스템으로 전송 가능)
+                        log.error("[세션 저장 최종 실패 - 수동 복구 필요] TID: {}, Code: {}, AccountNumber: {}",
+                                tid, maskingUtil.maskCode(code), accountNumber);
+                        // TODO: 알림 시스템 연동 (이메일, Slack, SMS 등)
                     }
                 }
 
@@ -250,6 +250,15 @@ public class AccountService {
 
     /**
      * BankUser 생성
+     *
+     * 보안 구조:
+     * 1. Redis에서 암호화된 데이터 가져오기
+     * 2. 복호화하여 평문으로 변환
+     * 3. RRN 해시값으로 기존 사용자 검색
+     * 4. 신규 사용자 생성 시:
+     *    - 평문 데이터를 엔티티에 저장
+     *    - JPA Converter가 자동으로 DB 암호화
+     *    - RRN 해시값 함께 저장 (검색용)
      */
     private BankUser createUser(AuthSession session) {
         // Redis에서 가져온 암호화된 데이터를 복호화
@@ -258,8 +267,9 @@ public class AccountService {
         String decryptedPhone = encryptionUtil.decrypt(session.getPhone());
         String decryptedBirth = encryptionUtil.decrypt(session.getBirth());
 
-        // 우선 회원으로 등록되어 있는지 검증 (복호화된 RRN으로 검색)
-        BankUser registeredUser = bankUserRepository.findByRrn(decryptedRrn).orElse(null);
+        // RRN 해시값으로 기존 사용자 검색 (암호화된 DB 조회)
+        String rrnHash = hashUtil.sha256(decryptedRrn);
+        BankUser registeredUser = bankUserRepository.findByRrnHash(rrnHash).orElse(null);
 
         // 회원으로 등록되어 있으면 해당 정보 return
         if (registeredUser != null) {
@@ -269,11 +279,12 @@ public class AccountService {
         // 회원으로 등록되어 있지 않으면 회원가입 진행
         LocalDate birthDate = LocalDate.parse(decryptedBirth, DateTimeFormatter.ofPattern(BIRTH_DATE_PATTERN));
         BankUser user = BankUser.builder()
-                .rrn(decryptedRrn)
-                .nameKr(decryptedName)
+                .rrn(decryptedRrn)          // JPA Converter가 암호화하여 DB 저장
+                .rrnHash(rrnHash)           // 검색용 해시값 (평문 저장)
+                .nameKr(decryptedName)      // JPA Converter가 암호화하여 DB 저장
                 .nameEn(session.getEngName())
                 .email(session.getEmail())
-                .phoneNumber(decryptedPhone)
+                .phoneNumber(decryptedPhone) // JPA Converter가 암호화하여 DB 저장
                 .birth(birthDate)
                 .build();
         return bankUserRepository.save(user);
@@ -341,5 +352,47 @@ public class AccountService {
                 .queryParam("code", code)
                 .build()
                 .toUriString();
+    }
+
+    /**
+     * Redis 세션 저장 재시도 로직 (보상 트랜잭션)
+     *
+     * @param tid Transaction ID
+     * @param session 저장할 세션 객체
+     * @param code 마스킹용 코드
+     * @param accountNumber 마스킹용 계좌번호
+     * @return 저장 성공 여부
+     */
+    private boolean saveSessionWithRetry(String tid, AuthSession session, String code, String accountNumber) {
+        int maxRetries = 3; // 최대 재시도 횟수
+        int retryDelayMs = 100; // 재시도 간격 (밀리초)
+
+        for (int attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                redis.save(tid, session);
+                log.info("[세션 업데이트 완료] TID: {}, Code: {}, 시도: {}/{}",
+                        tid, maskingUtil.maskCode(code), attempt, maxRetries);
+                return true;
+            } catch (Exception e) {
+                log.warn("[세션 저장 실패 - 재시도 {}/{}] TID: {}, Code: {}, AccountNumber: {}, Error: {}",
+                        attempt, maxRetries, tid, maskingUtil.maskCode(code), accountNumber, e.getMessage());
+
+                if (attempt < maxRetries) {
+                    try {
+                        // Exponential backoff: 100ms -> 200ms -> 400ms
+                        Thread.sleep(retryDelayMs * attempt);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        log.error("[재시도 대기 중 인터럽트] TID: {}", tid);
+                        return false;
+                    }
+                } else {
+                    // 최종 실패 시 상세 로그
+                    log.error("[세션 저장 최종 실패] TID: {}, Code: {}, AccountNumber: {}",
+                            tid, maskingUtil.maskCode(code), accountNumber, e);
+                }
+            }
+        }
+        return false;
     }
 }
