@@ -160,7 +160,7 @@ public class AccountService {
         try {
             // 3. BankUser 생성
             BankUser user = createUser(session);
-            log.info("[사용자 생성 완료] UserId: {}, Phone: {}", user.getId(), maskingUtil.maskPhone(user.getPhoneNumber()));
+            log.info("[사용자 생성 완료] UserId: {}", user.getId());
 
             // 4. BankAccount 생성
             BankAccount account = createBankAccount(user, request.password());
@@ -205,9 +205,8 @@ public class AccountService {
 
         } catch (DataIntegrityViolationException e) {
             // 동시성 이슈로 인한 중복 제약 위반 (Race Condition)
-            log.error("[계좌 개설 실패 - 중복] TID: {}, Phone: {}, Email: {}, Exception: {}",
+            log.error("[계좌 개설 실패 - 중복] TID: {}, Email: {}, Exception: {}",
                     request.tid(),
-                    maskingUtil.maskPhone(session.getPhone()),
                     maskingUtil.maskEmail(session.getEmail()),
                     e.getMessage(),
                     e);

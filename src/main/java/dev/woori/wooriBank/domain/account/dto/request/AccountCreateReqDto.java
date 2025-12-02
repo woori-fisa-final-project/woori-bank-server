@@ -14,6 +14,10 @@ import jakarta.validation.constraints.Pattern;
  *   2. Rate Limiting (IP/계좌당 시도 횟수 제한)
  *   3. 비밀번호 변경 주기 정책
  *
+ * ⚠️ redirectUrl 보안:
+ * - Open Redirect 취약점 방지를 위해 클라이언트 요청값 사용 안함
+ * - DB에 미리 등록된 redirectUrl만 사용 (BankClientApp 테이블)
+ *
  * TODO: 비즈니스 요구사항 재검토 및 보안 강화
  *       (예: 최소 6자리 이상, 영문+숫자 조합 등)
  */
@@ -23,9 +27,6 @@ public record AccountCreateReqDto(
 
         @NotBlank(message = "비밀번호는 필수입니다")
         @Pattern(regexp = "^\\d{4}$", message = "비밀번호는 4자리 숫자여야 합니다")
-        String password, // TODO: 보안 강화 필요 (현재 4자리 PIN은 취약)
-
-        @NotBlank(message = "Redirect URL은 필수입니다")
-        String redirectUrl
+        String password // TODO: 보안 강화 필요 (현재 4자리 PIN은 취약)
 ) {
 }
