@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        AWS_HOST     = "52.79.70.229"
+        AWS_HOST     = "43.201.222.157"
         DOCKER_IMAGE = "bae1234/woori-bank-server:latest"
     }
 
