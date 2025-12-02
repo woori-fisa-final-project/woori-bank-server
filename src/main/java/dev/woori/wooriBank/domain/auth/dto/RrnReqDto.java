@@ -1,13 +1,22 @@
 package dev.woori.wooriBank.domain.auth.dto;
 
+import dev.woori.wooriBank.domain.validation.ValidRrn;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Pattern;
 
 /**
  * 주민등록번호(RRN) 입력 요청 DTO
+ *
+ * @ValidRrn 애노테이션이 다음을 자동으로 검증:
+ * - 형식 검증 (######-#######)
+ * - 성별코드 검증 (1~4)
+ * - 체크섬 검증 (마지막 자리)
  */
 public record RrnReqDto(
-        @NotBlank(message = "TID는 필수입니다") String tid,
+        @NotBlank(message = "TID는 필수입니다")
+        String tid,
 
-        @NotBlank(message = "주민등록번호는 필수입니다") @Pattern(regexp = "^\\d{6}-[1-4]\\d{6}$", message = "주민등록번호 형식이 올바르지 않습니다 (예: 990101-1234567)") String rrn) {
+        @NotBlank(message = "주민등록번호는 필수입니다")
+        @ValidRrn
+        String rrn
+) {
 }

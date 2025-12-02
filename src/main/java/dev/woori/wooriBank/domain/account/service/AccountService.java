@@ -23,6 +23,7 @@ import dev.woori.wooriBank.domain.util.MaskingUtil;
 import dev.woori.wooriBank.domain.util.ValidationUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -60,6 +61,20 @@ public class AccountService {
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     private static final String CODE_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
     private static final int CODE_LENGTH = 16;
+
+    // Code 생성 설정 (외부 설정에서 주입)
+    @Value("${code.generation.max-retries}")
+    private int codeGenerationMaxRetries;
+
+    @Value("${code.generation.ttl}")
+    private long codeGenerationTtl;
+
+    // 비동기 재시도 설정 (외부 설정에서 주입)
+    @Value("${async.retry.max-attempts}")
+    private int asyncRetryMaxAttempts;
+
+    @Value("${async.retry.base-delay-ms}")
+    private int asyncRetryBaseDelayMs;
 
     public TidResDto getTid(String clientId) {
 
@@ -309,17 +324,16 @@ public class AccountService {
      * @return 생성되고 Redis에 선점된 Code
      */
     private String generateCode(String tid) {
-        int maxRetries = 10; // SETNX 실패 시 재시도 횟수 증가
-        for (int i = 0; i < maxRetries; i++) {
+        for (int i = 0; i < codeGenerationMaxRetries; i++) {
             String code = generateRandomCode();
 
             // Redis에 원자적으로 저장 (SETNX)
             // 존재하지 않는 경우에만 저장되므로 동시성 문제 해결
-            if (redis.setCodeIfAbsent(code, tid, 600L)) { // 10분 TTL
+            if (redis.setCodeIfAbsent(code, tid, codeGenerationTtl)) {
                 log.debug("[Code 생성 성공] Code: {}, TID: {}", maskingUtil.maskCode(code), tid);
                 return code; // 선점 성공
             }
-            log.warn("[Code 중복 감지] 재생성 시도: {}/{}", i + 1, maxRetries);
+            log.warn("[Code 중복 감지] 재생성 시도: {}/{}", i + 1, codeGenerationMaxRetries);
         }
         throw new CommonException(ErrorCode.INTERNAL_SERVER_ERROR,
                 "Code 생성에 실패했습니다. 잠시 후 다시 시도해주세요.");
@@ -351,9 +365,8 @@ public class AccountService {
      * Redis 세션 저장 재시도 로직 (비동기 보상 트랜잭션)
      *
      * 재시도 전략: Exponential Backoff
-     * - 1차 실패 후: 100ms 대기
-     * - 2차 실패 후: 200ms 대기
-     * - 3차 실패 시: 최종 실패 (알림 필요)
+     * - baseDelayMs를 기준으로 2^(attempt-1) 배로 증가
+     * - 기본값(100ms): 100ms -> 200ms -> 400ms
      *
      * 비동기 처리:
      * - @Async로 별도 스레드에서 실행
@@ -367,23 +380,20 @@ public class AccountService {
      */
     @Async
     public void saveSessionWithRetryAsync(String tid, AuthSession session, String code, String accountNumber) {
-        int maxRetries = 3;
-        int baseDelayMs = 100;
-
-        for (int attempt = 1; attempt <= maxRetries; attempt++) {
+        for (int attempt = 1; attempt <= asyncRetryMaxAttempts; attempt++) {
             try {
                 redis.save(tid, session);
                 log.info("[비동기 세션 업데이트 완료] TID: {}, Code: {}, 시도: {}/{}",
-                        tid, maskingUtil.maskCode(code), attempt, maxRetries);
+                        tid, maskingUtil.maskCode(code), attempt, asyncRetryMaxAttempts);
                 return; // 성공 시 종료
             } catch (Exception e) {
                 log.warn("[비동기 세션 저장 실패 - 재시도 {}/{}] TID: {}, Code: {}, AccountNumber: {}, Error: {}",
-                        attempt, maxRetries, tid, maskingUtil.maskCode(code), accountNumber, e.getMessage());
+                        attempt, asyncRetryMaxAttempts, tid, maskingUtil.maskCode(code), accountNumber, e.getMessage());
 
-                if (attempt < maxRetries) {
+                if (attempt < asyncRetryMaxAttempts) {
                     try {
-                        // Exponential backoff: 100ms -> 200ms
-                        long delay = (long) (Math.pow(2, attempt - 1) * baseDelayMs);
+                        // Exponential backoff: 2^(attempt-1) * baseDelayMs
+                        long delay = (long) (Math.pow(2, attempt - 1) * asyncRetryBaseDelayMs);
                         Thread.sleep(delay); // 비동기 스레드이므로 메인 요청에 영향 없음
                         log.debug("[비동기 재시도 대기] {}ms 후 {}번째 시도", delay, attempt + 1);
                     } catch (InterruptedException ie) {
