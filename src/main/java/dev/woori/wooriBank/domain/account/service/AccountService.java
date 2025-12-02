@@ -213,7 +213,8 @@ public class AccountService {
 
             // 6. Redirect URL 생성
             String redirectUrl = bankClientAppRepository.findByClientId(session.getClientId())
-                    .orElseThrow(() -> new CommonException(ErrorCode.ENTITY_NOT_FOUND)).getRedirectUrl();
+                    .orElseThrow(() -> new CommonException(ErrorCode.ENTITY_NOT_FOUND, "클라이언트 앱을 찾을 수 없습니다"))
+                    .getRedirectUrl();
             log.info("[계좌 개설 완료] TID: {}, AccountNumber: {}", request.tid(), account.getAccountNumber());
 
             return new AccountCreateResDto(buildRedirectUrl(redirectUrl, code));
