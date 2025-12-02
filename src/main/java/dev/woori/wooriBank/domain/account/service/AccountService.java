@@ -24,6 +24,7 @@ import dev.woori.wooriBank.domain.util.ValidationUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -176,15 +177,8 @@ public class AccountService {
                     session.setCode(code);
                     session.setAccountNumber(accountNumber);
 
-                    // 재시도 로직으로 보상 트랜잭션 구현
-                    boolean success = saveSessionWithRetry(tid, session, code, accountNumber);
-
-                    if (!success) {
-                        // 재시도 실패 시 알림 (모니터링 시스템으로 전송 가능)
-                        log.error("[세션 저장 최종 실패 - 수동 복구 필요] TID: {}, Code: {}, AccountNumber: {}",
-                                tid, maskingUtil.maskCode(code), accountNumber);
-                        // TODO: 알림 시스템 연동 (이메일, Slack, SMS 등)
-                    }
+                    // 비동기로 재시도 로직 실행 (메인 스레드 차단 방지)
+                    saveSessionWithRetryAsync(tid, session, code, accountNumber);
                 }
 
                 @Override
@@ -355,44 +349,71 @@ public class AccountService {
     }
 
     /**
-     * Redis 세션 저장 재시도 로직 (보상 트랜잭션)
+     * Redis 세션 저장 재시도 로직 (비동기 보상 트랜잭션)
+     *
+     * 재시도 전략: Exponential Backoff
+     * - 1차 실패 후: 100ms 대기
+     * - 2차 실패 후: 200ms 대기
+     * - 3차 실패 시: 최종 실패 (알림 필요)
+     *
+     * 비동기 처리:
+     * - @Async로 별도 스레드에서 실행
+     * - 메인 요청 스레드를 차단하지 않음
+     * - 실패 시 로깅 및 알림만 수행 (메인 응답은 정상)
      *
      * @param tid Transaction ID
      * @param session 저장할 세션 객체
-     * @param code 마스킹용 코드
-     * @param accountNumber 마스킹용 계좌번호
-     * @return 저장 성공 여부
+     * @param code 마스킹용 코드 (평문)
+     * @param accountNumber 마스킹용 계좌번호 (평문)
      */
-    private boolean saveSessionWithRetry(String tid, AuthSession session, String code, String accountNumber) {
-        int maxRetries = 3; // 최대 재시도 횟수
-        int retryDelayMs = 100; // 재시도 간격 (밀리초)
+    @Async
+    public void saveSessionWithRetryAsync(String tid, AuthSession session, String code, String accountNumber) {
+        int maxRetries = 3;
+        int baseDelayMs = 100;
 
         for (int attempt = 1; attempt <= maxRetries; attempt++) {
             try {
                 redis.save(tid, session);
-                log.info("[세션 업데이트 완료] TID: {}, Code: {}, 시도: {}/{}",
+                log.info("[비동기 세션 업데이트 완료] TID: {}, Code: {}, 시도: {}/{}",
                         tid, maskingUtil.maskCode(code), attempt, maxRetries);
-                return true;
+                return; // 성공 시 종료
             } catch (Exception e) {
-                log.warn("[세션 저장 실패 - 재시도 {}/{}] TID: {}, Code: {}, AccountNumber: {}, Error: {}",
+                log.warn("[비동기 세션 저장 실패 - 재시도 {}/{}] TID: {}, Code: {}, AccountNumber: {}, Error: {}",
                         attempt, maxRetries, tid, maskingUtil.maskCode(code), accountNumber, e.getMessage());
 
                 if (attempt < maxRetries) {
                     try {
-                        // Exponential backoff: 100ms -> 200ms -> 400ms
-                        Thread.sleep(retryDelayMs * attempt);
+                        // Exponential backoff: 100ms -> 200ms
+                        long delay = (long) (Math.pow(2, attempt - 1) * baseDelayMs);
+                        Thread.sleep(delay); // 비동기 스레드이므로 메인 요청에 영향 없음
+                        log.debug("[비동기 재시도 대기] {}ms 후 {}번째 시도", delay, attempt + 1);
                     } catch (InterruptedException ie) {
                         Thread.currentThread().interrupt();
-                        log.error("[재시도 대기 중 인터럽트] TID: {}", tid);
-                        return false;
+                        log.error("[비동기 재시도 인터럽트] TID: {}", tid);
+                        sendFailureAlert(tid, code, accountNumber, e);
+                        return;
                     }
                 } else {
-                    // 최종 실패 시 상세 로그
-                    log.error("[세션 저장 최종 실패] TID: {}, Code: {}, AccountNumber: {}",
+                    // 최종 실패 시 알림
+                    log.error("[비동기 세션 저장 최종 실패] TID: {}, Code: {}, AccountNumber: {}",
                             tid, maskingUtil.maskCode(code), accountNumber, e);
+                    sendFailureAlert(tid, code, accountNumber, e);
                 }
             }
         }
-        return false;
+    }
+
+    /**
+     * 세션 저장 최종 실패 시 알림 전송
+     * TODO: 실제 알림 시스템 연동 (이메일, Slack, SMS 등)
+     */
+    private void sendFailureAlert(String tid, String code, String accountNumber, Exception e) {
+        // TODO: 알림 시스템 연동
+        log.error("===== 세션 저장 최종 실패 알림 =====");
+        log.error("TID: {}", tid);
+        log.error("Code: {}", maskingUtil.maskCode(code));
+        log.error("AccountNumber: {}", accountNumber);
+        log.error("Error: ", e);
+        log.error("==================================");
     }
 }
