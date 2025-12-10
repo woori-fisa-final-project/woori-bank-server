@@ -3,13 +3,12 @@ package dev.woori.wooriBank.domain.auth.controller;
 import dev.woori.wooriBank.config.response.ApiResponse;
 import dev.woori.wooriBank.config.response.BaseResponse;
 import dev.woori.wooriBank.config.response.SuccessCode;
-import dev.woori.wooriBank.domain.auth.dto.RefreshReqDto;
-import dev.woori.wooriBank.domain.auth.entity.BankClientApp;
+import dev.woori.wooriBank.domain.auth.dto.*;
 import dev.woori.wooriBank.domain.auth.service.AuthService;
-import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 @Slf4j
@@ -21,13 +20,42 @@ public class AuthController {
     private final AuthService authService;
 
     @PostMapping("/token")
-    public ResponseEntity<BaseResponse<?>> issueToken(HttpServletRequest request){
-        BankClientApp clientApp = (BankClientApp)request.getAttribute("clientApp");
-        return ApiResponse.success(SuccessCode.OK, authService.issueToken(clientApp.getName()));
+    public ResponseEntity<BaseResponse<?>> issueToken(@RequestBody TokenReqDto request){
+        return ApiResponse.success(SuccessCode.OK, authService.issueToken(request.userId()));
     }
 
     @PostMapping("/refresh")
     public ResponseEntity<BaseResponse<?>> refresh(@RequestBody RefreshReqDto refreshToken) {
         return ApiResponse.success(SuccessCode.OK, authService.refresh(refreshToken));
+    }
+
+    // 본인인증 정보를 입력하면 인증번호를 발송해준다고 가정
+    // 서버에서는 ok 응답만 보내줌
+    @PostMapping("/request")
+    public ResponseEntity<BaseResponse<?>> request(@RequestBody AuthReqDto authReqDto){
+        authService.request(authReqDto);
+        return ApiResponse.success(SuccessCode.OK);
+    }
+
+    @PostMapping("/verify")
+    public ResponseEntity<BaseResponse<?>> verify(@RequestBody AuthVerifyReqDto request){
+        authService.verify(request);
+        return ApiResponse.success(SuccessCode.OK);
+    }
+
+    @PostMapping("/request/resend")
+    public ResponseEntity<BaseResponse<?>> resend(@RequestBody AuthCodeRefreshReqDto request){
+        authService.resendAuthCode(request);
+        return ApiResponse.success(SuccessCode.OK);
+    }
+
+    /**
+     * 주민등록번호(RRN) 입력
+     * POST /auth/rrn
+     */
+    @PostMapping("/rrn")
+    public ResponseEntity<BaseResponse<?>> saveRrn(@RequestBody RrnReqDto request) {
+        RrnResDto response = authService.saveRrn(request);
+        return ApiResponse.success(SuccessCode.OK, response);
     }
 }

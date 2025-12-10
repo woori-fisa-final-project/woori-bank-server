@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
@@ -21,19 +22,18 @@ import java.io.IOException;
 public class AppKeySecretFilter extends OncePerRequestFilter {
 
     private final BankClientAppRepository bankClientAppRepository;
+    private final PasswordEncoder passwordEncoder;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
 
-        // 토큰 발급 요청인지 확인 - 아니면 다음 필터로 넘어감
         String path = request.getRequestURI();
-        if (!path.equals("/auth/token")) {
+        if (!path.startsWith("/account")) {
             filterChain.doFilter(request, response);
             return;
         }
 
-        // 토큰 발급 요청인 경우
         // 헤더에서 appKey와 secretKey값을 꺼내옴
         String appKey = request.getHeader("appKey");
         String secretKey = request.getHeader("secretKey");
@@ -52,7 +52,7 @@ public class AppKeySecretFilter extends OncePerRequestFilter {
 
         // DB에서 검증
         BankClientApp clientApp = bankClientAppRepository.findByAppKey(appKey).orElse(null);
-        if(clientApp == null || !clientApp.getSecretKey().equals(secretKey)) {
+        if(clientApp == null || !passwordEncoder.matches(secretKey, clientApp.getSecretKey())) {
             log.warn("[Unauthorized] {} {} - {}", request.getMethod(), request.getRequestURI(),
                     "appKey 혹은 secretKey가 유효하지 않습니다.");
 
@@ -66,7 +66,7 @@ public class AppKeySecretFilter extends OncePerRequestFilter {
         // TODO: payload secretKey로 검증하기
 
         // 검증이 끝나면 clientApp을 attribute로 설정
-        request.setAttribute("clientApp", clientApp);
+        request.setAttribute("clientApp", clientApp.getClientId());
 
         filterChain.doFilter(request, response);
     }

@@ -16,14 +16,20 @@ public class BankClientApp extends BaseEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(name = "client_id")
+    private String clientId;
+
+    @Column(name = "name", nullable = false)
+    private String name;
+
     @Column(name = "app_key", nullable = false, unique = true)
     private String appKey;
 
     @Column(name = "secret_key", nullable = false)
     private String secretKey;
 
-    @Column(name = "name", nullable = false)
-    private String name;
+    @Column(name = "redirect_url")
+    private String redirectUrl;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)

@@ -5,17 +5,22 @@ import dev.woori.wooriBank.config.exception.ErrorCode;
 import dev.woori.wooriBank.config.jwt.JwtInfo;
 import dev.woori.wooriBank.config.jwt.JwtValidator;
 import dev.woori.wooriBank.config.security.Encoder;
-import dev.woori.wooriBank.domain.auth.dto.TokenResDto;
-import dev.woori.wooriBank.domain.auth.dto.RefreshReqDto;
+import dev.woori.wooriBank.domain.auth.dto.*;
+import dev.woori.wooriBank.domain.auth.entity.AuthSession;
+import dev.woori.wooriBank.domain.auth.entity.AuthStoreRedis;
 import dev.woori.wooriBank.domain.auth.entity.RefreshToken;
 import dev.woori.wooriBank.domain.auth.jwt.JwtIssuer;
 import dev.woori.wooriBank.domain.auth.port.RefreshTokenPort;
 import dev.woori.wooriBank.domain.auth.entity.Role;
+import dev.woori.wooriBank.domain.util.EncryptionUtil;
+import dev.woori.wooriBank.domain.util.ValidationUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.security.SecureRandom;
 import java.time.Instant;
 
 @Slf4j
@@ -28,6 +33,12 @@ public class AuthService {
     private final JwtIssuer jwtIssuer;
     private final JwtValidator jwtValidator;
     private final RefreshTokenPort refreshTokenRepository;
+    private final AuthStoreRedis redis;
+    private final ValidationUtil validationUtil;
+    private final EncryptionUtil encryptionUtil;
+    private static final SecureRandom random = new SecureRandom();
+    @Value("${auth.verification.max-attempts}")
+    private int maxAttempts;
 
     /**
      * name에 따른 token을 발급합니다.
@@ -64,7 +75,91 @@ public class AuthService {
         return generateAndSaveToken(username, role);
     }
 
-    public TokenResDto generateAndSaveToken(String username, Role role){
+    /**
+     * 사용자가 입력한 본인인증 정보를 저장하고, 인증번호를 생성합니다.
+     * @param request tid + 사용자가 입력한 개인정보(이름, 생일, 전화번호)
+     */
+    public void request(AuthReqDto request){
+        // tid 검증
+        AuthSession session = validationUtil.getSessionOrThrow(request.tid());
+
+        // 세션에 개인정보 임시저장 (암호화)
+        session.setName(encryptionUtil.encrypt(request.name()));
+        session.setBirth(encryptionUtil.encrypt(request.birth()));
+        session.setPhone(encryptionUtil.encrypt(request.phone()));
+
+        // 인증번호 발급
+        issueNewAuthCode(session);
+    }
+
+    /**
+     * 사용자가 입력한 인증번호를 검증합니다.
+     * @param request tid + 입력한 인증번호
+     */
+    public void verify(AuthVerifyReqDto request){
+        // tid 검증
+        AuthSession session = validationUtil.getSessionOrThrow(request.tid());
+
+        // 인증번호 값이 null일 경우
+        if (session.getAuthCode() == null) {
+            throw new CommonException(ErrorCode.INVALID_REQUEST, "만료된 인증번호입니다. 재발송 버튼을 눌러주세요.");
+        }
+
+        // 인증에 실패했을 경우
+        if(!request.authCode().equals(session.getAuthCode())){
+            // 일정 횟수 이상 실패했을 경우 (이번 시도 포함)
+            if(session.getFailedAttempts() >= maxAttempts - 1){
+                session.setAuthCode(null);
+                session.setFailedAttempts(0);
+                redis.save(request.tid(), session);
+                throw new CommonException(ErrorCode.FORBIDDEN, "인증번호 검증에 실패했습니다. 인증번호를 다시 발급해 주세요.");
+            }
+            session.setFailedAttempts(session.getFailedAttempts() + 1);
+            redis.save(request.tid(), session); // 실패 횟수 업데이트
+            throw new CommonException(ErrorCode.UNAUTHORIZED, "인증번호가 일치하지 않습니다.");
+        }
+
+        // 인증에 성공하면 verified 상태로 전환
+        session.setVerified(true);
+        session.setAuthCode(null);
+        session.setFailedAttempts(0);
+        redis.save(request.tid(), session);
+    }
+
+    /**
+     * 인증번호 재발급 api
+     * @param request tid
+     */
+    public void resendAuthCode(AuthCodeRefreshReqDto request){
+        AuthSession session = validationUtil.getSessionOrThrow(request.tid());
+        session.setResendAttempts(session.getResendAttempts() + 1);
+        issueNewAuthCode(session);
+    }
+
+    /**
+     * 주민등록번호(RRN)를 세션에 저장합니다.
+     * 
+     * @param request tid + 주민등록번호
+     * @return 성공 여부
+     */
+    public RrnResDto saveRrn(RrnReqDto request) {
+        // 1. TID 검증
+        AuthSession session = validationUtil.getSessionOrThrow(request.tid());
+
+        // 2. 본인인증 완료 확인
+        if (!session.isVerified()) {
+            throw new CommonException(ErrorCode.FORBIDDEN, "본인인증을 먼저 완료해주세요");
+        }
+
+        // 3. 주민등록번호(RRN) 저장 (암호화)
+        session.setRrn(encryptionUtil.encrypt(request.rrn()));
+        redis.save(request.tid(), session);
+
+        log.info("[주민등록번호 저장] TID: {}", request.tid());
+        return new RrnResDto(true);
+    }
+
+    private TokenResDto generateAndSaveToken(String username, Role role) {
         // jwt 토큰 저장 로직
         String accessToken = jwtIssuer.generateAccessToken(username, role);
         var refreshTokenInfo = jwtIssuer.generateRefreshToken(username, role);
@@ -86,5 +181,26 @@ public class AuthService {
         refreshTokenRepository.save(token);
 
         return new TokenResDto(accessToken, refreshToken);
+    }
+
+    // 인증번호 발급용 메서드
+    private void issueNewAuthCode(AuthSession session){
+        // 재발급 시도가 너무 많을 경우
+        if(session.getResendAttempts() >= maxAttempts){
+            redis.delete(session.getTid()); // 세션 삭제
+            throw new CommonException(ErrorCode.FORBIDDEN,
+                    "재발송 횟수를 초과했습니다. 처음부터 다시 시도해주세요.");
+        }
+
+        // 새로운 인증번호 발급
+        String newCode = String.format("%06d", random.nextInt(1000000));
+        session.setAuthCode(newCode);
+
+        session.setFailedAttempts(0);
+        session.setVerified(false);
+
+        // 테스트용: 만들어진 코드를 콘솔에서 확인할 수 있도록 설정
+        log.info("authCode: {}", newCode);
+        redis.save(session.getTid(), session);
     }
 }
