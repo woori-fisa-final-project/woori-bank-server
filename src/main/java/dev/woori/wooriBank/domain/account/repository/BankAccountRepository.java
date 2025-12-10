@@ -13,6 +13,8 @@ public interface BankAccountRepository extends JpaRepository<BankAccount, Long> 
 
     Optional<BankAccount> findByAccountNumber(String accountNumber);
 
+    boolean existsByAccountNumber(String accountNumber);
+
     /**
      * 계좌번호로 계좌 조회
      *

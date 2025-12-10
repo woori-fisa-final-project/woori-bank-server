@@ -12,6 +12,7 @@ import dev.woori.wooriBank.domain.auth.entity.RefreshToken;
 import dev.woori.wooriBank.domain.auth.jwt.JwtIssuer;
 import dev.woori.wooriBank.domain.auth.port.RefreshTokenPort;
 import dev.woori.wooriBank.domain.auth.entity.Role;
+import dev.woori.wooriBank.domain.util.EncryptionUtil;
 import dev.woori.wooriBank.domain.util.ValidationUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -34,6 +35,7 @@ public class AuthService {
     private final RefreshTokenPort refreshTokenRepository;
     private final AuthStoreRedis redis;
     private final ValidationUtil validationUtil;
+    private final EncryptionUtil encryptionUtil;
     private static final SecureRandom random = new SecureRandom();
     @Value("${auth.verification.max-attempts}")
     private int maxAttempts;
@@ -81,10 +83,10 @@ public class AuthService {
         // tid 검증
         AuthSession session = validationUtil.getSessionOrThrow(request.tid());
 
-        // 세션에 개인정보 임시저장
-        session.setName(request.name());
-        session.setBirth(request.birth());
-        session.setPhone(request.phone());
+        // 세션에 개인정보 임시저장 (암호화)
+        session.setName(encryptionUtil.encrypt(request.name()));
+        session.setBirth(encryptionUtil.encrypt(request.birth()));
+        session.setPhone(encryptionUtil.encrypt(request.phone()));
 
         // 인증번호 발급
         issueNewAuthCode(session);
@@ -105,8 +107,8 @@ public class AuthService {
 
         // 인증에 실패했을 경우
         if(!request.authCode().equals(session.getAuthCode())){
-            // 일정 횟수 이상 실패했을 경우
-            if(session.getFailedAttempts() >= maxAttempts){
+            // 일정 횟수 이상 실패했을 경우 (이번 시도 포함)
+            if(session.getFailedAttempts() >= maxAttempts - 1){
                 session.setAuthCode(null);
                 session.setFailedAttempts(0);
                 redis.save(request.tid(), session);
@@ -134,7 +136,30 @@ public class AuthService {
         issueNewAuthCode(session);
     }
 
-    private TokenResDto generateAndSaveToken(String username, Role role){
+    /**
+     * 주민등록번호(RRN)를 세션에 저장합니다.
+     * 
+     * @param request tid + 주민등록번호
+     * @return 성공 여부
+     */
+    public RrnResDto saveRrn(RrnReqDto request) {
+        // 1. TID 검증
+        AuthSession session = validationUtil.getSessionOrThrow(request.tid());
+
+        // 2. 본인인증 완료 확인
+        if (!session.isVerified()) {
+            throw new CommonException(ErrorCode.FORBIDDEN, "본인인증을 먼저 완료해주세요");
+        }
+
+        // 3. 주민등록번호(RRN) 저장 (암호화)
+        session.setRrn(encryptionUtil.encrypt(request.rrn()));
+        redis.save(request.tid(), session);
+
+        log.info("[주민등록번호 저장] TID: {}", request.tid());
+        return new RrnResDto(true);
+    }
+
+    private TokenResDto generateAndSaveToken(String username, Role role) {
         // jwt 토큰 저장 로직
         String accessToken = jwtIssuer.generateAccessToken(username, role);
         var refreshTokenInfo = jwtIssuer.generateRefreshToken(username, role);

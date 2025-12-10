@@ -48,4 +48,14 @@ public class AuthController {
         authService.resendAuthCode(request);
         return ApiResponse.success(SuccessCode.OK);
     }
+
+    /**
+     * 주민등록번호(RRN) 입력
+     * POST /auth/rrn
+     */
+    @PostMapping("/rrn")
+    public ResponseEntity<BaseResponse<?>> saveRrn(@RequestBody RrnReqDto request) {
+        RrnResDto response = authService.saveRrn(request);
+        return ApiResponse.success(SuccessCode.OK, response);
+    }
 }

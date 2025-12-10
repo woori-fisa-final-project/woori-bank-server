@@ -15,6 +15,9 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
 
+import java.util.ArrayList;
+import java.util.List;
+
 @Configuration
 @EnableCaching
 public class RedisConfig {
@@ -47,7 +50,10 @@ public class RedisConfig {
         // JsonTypeInfo.As.PROPERTY: JSON에 타입 정보 삽입
         ObjectMapper customObjectMapper = objectMapper.copy();
         var ptv = BasicPolymorphicTypeValidator.builder()
-                        .allowIfBaseType(AuthSession.class) // AuthSession 클래스에 대해서만 역직렬화 허용
+                        .allowIfBaseType(AuthSession.class) // AuthSession 클래스 허용
+                        .allowIfBaseType(AuthSession.TermAgreement.class) // TermAgreement 내부 클래스 허용
+                        .allowIfBaseType(List.class) // List 허용
+                        .allowIfBaseType(ArrayList.class) // ArrayList 허용
                         .build();
         customObjectMapper.activateDefaultTyping(ptv, ObjectMapper.DefaultTyping.NON_FINAL, JsonTypeInfo.As.PROPERTY);
 
